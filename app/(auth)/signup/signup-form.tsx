@@ -34,7 +34,7 @@ export function SignupForm() {
   async function onSubmit(values: Values) {
     setSubmitting(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
       options: {
@@ -47,7 +47,16 @@ export function SignupForm() {
       toast.error(error.message);
       return;
     }
-    toast.success("Account created — check your email if confirmation is on.");
+    if (!data.session) {
+      // Supabase returned a user but no session → email confirmation is required.
+      toast.success(
+        "Account created. Check your inbox to confirm your email, then sign in.",
+        { duration: 8000 },
+      );
+      router.push("/login");
+      return;
+    }
+    toast.success("Account created — signing you in.");
     router.push("/dashboard");
     router.refresh();
   }

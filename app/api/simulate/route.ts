@@ -50,10 +50,10 @@ async function authorize(request: NextRequest) {
     return profile?.role === "admin";
   }
   const auth = request.headers.get("authorization");
-  return (
-    !!process.env.SIMULATE_CRON_SECRET &&
-    auth === `Bearer ${process.env.SIMULATE_CRON_SECRET}`
-  );
+  // Accept either our custom secret OR Vercel's CRON_SECRET convention.
+  const expected =
+    process.env.SIMULATE_CRON_SECRET || process.env.CRON_SECRET;
+  return !!expected && auth === `Bearer ${expected}`;
 }
 
 export async function POST(request: NextRequest) {

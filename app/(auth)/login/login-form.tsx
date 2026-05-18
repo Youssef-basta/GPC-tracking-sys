@@ -36,7 +36,12 @@ export function LoginForm() {
     const { error } = await supabase.auth.signInWithPassword(values);
     setSubmitting(false);
     if (error) {
-      toast.error("Invalid credentials");
+      // Surface the real reason — invalid password, unconfirmed email, rate limit, etc.
+      const msg =
+        error.message?.toLowerCase().includes("invalid login credentials")
+          ? "Invalid credentials"
+          : error.message || "Sign-in failed";
+      toast.error(msg);
       return;
     }
     router.push(redirect);
