@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageTitle } from "@/components/page-title";
-import { Download, FileBarChart } from "lucide-react";
+import { Download, FileBarChart, FileText } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -158,7 +158,9 @@ export default async function ReportsPage({
   }
   if (type === "speed") exportParams.set("threshold", String(threshold));
   if (type === "idle") exportParams.set("min_idle", String(minIdle));
-  const exportHref = `/api/export/report-${type}?${exportParams.toString()}`;
+  const baseExport = `/api/export/report-${type}?${exportParams.toString()}`;
+  const csvHref = baseExport;
+  const pdfHref = `${baseExport}&format=pdf`;
 
   return (
     <div className="space-y-6">
@@ -170,12 +172,20 @@ export default async function ReportsPage({
             {days === 1 ? "" : "s"} of pings.
           </p>
         </div>
-        <a href={exportHref}>
-          <Button variant="outline" size="sm">
-            <Download className="mr-1.5 size-3.5" />
-            Export CSV
-          </Button>
-        </a>
+        <div className="flex gap-2">
+          <a href={csvHref}>
+            <Button variant="outline" size="sm">
+              <Download className="mr-1.5 size-3.5" />
+              CSV
+            </Button>
+          </a>
+          <a href={pdfHref}>
+            <Button variant="outline" size="sm">
+              <FileText className="mr-1.5 size-3.5" />
+              PDF
+            </Button>
+          </a>
+        </div>
       </div>
 
       {/* Tabs */}

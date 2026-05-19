@@ -9,9 +9,12 @@ import {
   Marker,
   Popup,
   useMap,
+  Circle,
+  Polygon,
+  Rectangle,
 } from "react-leaflet";
 import { createClient } from "@/lib/supabase/client";
-import type { Vehicle } from "@/lib/types";
+import type { Vehicle, Zone } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 
 // Fix default marker icons in webpack/turbopack builds
@@ -53,14 +56,38 @@ function FitBoundsOnce({ vehicles }: { vehicles: Vehicle[] }) {
   return null;
 }
 
+function ZonePopup({ zone }: { zone: Zone }) {
+  return (
+    <div className="space-y-0.5 text-sm">
+      <div className="font-semibold">
+        {zone.name}
+        {zone.is_prohibited && (
+          <span className="ml-1 rounded bg-red-100 px-1 py-0.5 text-[10px] font-medium text-red-700">
+            Prohibited
+          </span>
+        )}
+      </div>
+      <div className="text-xs capitalize text-muted-foreground">
+        {zone.kind} · alerts on {zone.alert_on}
+      </div>
+      {zone.description && (
+        <div className="text-xs text-muted-foreground">{zone.description}</div>
+      )}
+    </div>
+  );
+}
+
 export function RealtimeMap({
   initialVehicles,
+  initialZones = [],
   height = 520,
 }: {
   initialVehicles: Vehicle[];
+  initialZones?: Zone[];
   height?: number;
 }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
+  const [zones, setZones] = useState<Zone[]>(initialZones);
 
   useEffect(() => {
     const supabase = createClient();
@@ -92,6 +119,28 @@ export function RealtimeMap({
     };
   }, []);
 
+  // Realtime updates for zones — small in number, refetch on any change
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("zones-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "zones" },
+        async () => {
+          const { data } = await supabase
+            .from("zones")
+            .select("*")
+            .is("deleted_at", null);
+          if (data) setZones(data as Zone[]);
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const center = useMemo<[number, number]>(() => {
     const withCoords = vehicles.find(
       (v) => v.last_lat != null && v.last_lng != null,
@@ -102,10 +151,7 @@ export function RealtimeMap({
   }, [vehicles]);
 
   return (
-    <div
-      className="overflow-hidden rounded-lg border"
-      style={{ height }}
-    >
+    <div className="overflow-hidden rounded-lg border" style={{ height }}>
       <MapContainer
         center={center}
         zoom={11}
@@ -117,6 +163,60 @@ export function RealtimeMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         <FitBoundsOnce vehicles={vehicles} />
+
+        {/* Zone overlays — render UNDER markers */}
+        {zones.map((z) => {
+          const s = z.shape as Record<string, unknown>;
+          const color = z.is_prohibited ? "#dc2626" : "#0ea5e9";
+          const opts = {
+            color,
+            weight: 2,
+            fillColor: color,
+            fillOpacity: z.is_prohibited ? 0.18 : 0.1,
+          };
+          if (z.kind === "circle") {
+            return (
+              <Circle
+                key={z.id}
+                center={[s.lat as number, s.lng as number]}
+                radius={s.radius_m as number}
+                pathOptions={opts}
+              >
+                <Popup>
+                  <ZonePopup zone={z} />
+                </Popup>
+              </Circle>
+            );
+          }
+          if (z.kind === "rectangle") {
+            return (
+              <Rectangle
+                key={z.id}
+                bounds={[
+                  [s.south as number, s.west as number],
+                  [s.north as number, s.east as number],
+                ]}
+                pathOptions={opts}
+              >
+                <Popup>
+                  <ZonePopup zone={z} />
+                </Popup>
+              </Rectangle>
+            );
+          }
+          if (z.kind === "polygon") {
+            const positions = (s.points as [number, number][]) || [];
+            return (
+              <Polygon key={z.id} positions={positions} pathOptions={opts}>
+                <Popup>
+                  <ZonePopup zone={z} />
+                </Popup>
+              </Polygon>
+            );
+          }
+          return null;
+        })}
+
         {vehicles
           .filter((v) => v.last_lat != null && v.last_lng != null)
           .map((v) => (

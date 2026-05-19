@@ -23,6 +23,7 @@ const userNav = [
 const adminNav = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/content", label: "Content" },
+  { href: "/admin/zones", label: "Zones" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/reports", label: "Reports" },
 ];

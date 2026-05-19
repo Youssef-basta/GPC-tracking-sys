@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { detectZoneCrossings, type ZoneKind, type ZoneShape } from "@/lib/geofencing";
 
 /**
  * GPS simulator + lightweight AI-style anomaly detector.
@@ -76,6 +77,20 @@ async function run(request: NextRequest) {
     .is("deleted_at", null);
   if (error) return new NextResponse(error.message, { status: 500 });
 
+  // Load active zones once per tick — used for crossing detection below
+  const { data: zonesData } = await admin
+    .from("zones")
+    .select("id, name, kind, shape, is_prohibited, alert_on")
+    .is("deleted_at", null);
+  const zones = (zonesData ?? []) as Array<{
+    id: string;
+    name: string;
+    kind: ZoneKind;
+    shape: ZoneShape;
+    is_prohibited: boolean;
+    alert_on: "enter" | "exit" | "both";
+  }>;
+
   const now = new Date();
   const inserts: Array<{
     vehicle_id: string;
@@ -88,6 +103,19 @@ async function run(request: NextRequest) {
     anomaly_kind: string | null;
   }> = [];
   const anomalyNotices: { vehicle_id: string; kind: string }[] = [];
+  const zoneEventInserts: Array<{
+    zone_id: string;
+    vehicle_id: string;
+    kind: "enter" | "exit";
+    lat: number;
+    lng: number;
+  }> = [];
+  const zoneNotices: {
+    vehicle_id: string;
+    zone_name: string;
+    kind: "enter" | "exit";
+    is_prohibited: boolean;
+  }[] = [];
 
   for (const v of vehicles || []) {
     const baseLat = v.last_lat ?? 24.7136;
@@ -126,26 +154,85 @@ async function run(request: NextRequest) {
     });
 
     if (anomaly) anomalyNotices.push({ vehicle_id: v.id, kind: anomaly_kind! });
+
+    // Geofence crossing detection — diff zones-in between prev and new positions.
+    if (zones.length > 0) {
+      const prev: [number, number] | null =
+        v.last_lat != null && v.last_lng != null
+          ? [v.last_lat, v.last_lng]
+          : null;
+      const { entered, exited } = detectZoneCrossings(prev, [lat, lng], zones);
+      for (const z of entered) {
+        zoneEventInserts.push({
+          zone_id: z.id,
+          vehicle_id: v.id,
+          kind: "enter",
+          lat,
+          lng,
+        });
+        if (z.alert_on === "enter" || z.alert_on === "both") {
+          zoneNotices.push({
+            vehicle_id: v.id,
+            zone_name: z.name,
+            kind: "enter",
+            is_prohibited: z.is_prohibited,
+          });
+        }
+      }
+      for (const z of exited) {
+        zoneEventInserts.push({
+          zone_id: z.id,
+          vehicle_id: v.id,
+          kind: "exit",
+          lat,
+          lng,
+        });
+        if (z.alert_on === "exit" || z.alert_on === "both") {
+          zoneNotices.push({
+            vehicle_id: v.id,
+            zone_name: z.name,
+            kind: "exit",
+            is_prohibited: z.is_prohibited,
+          });
+        }
+      }
+    }
   }
 
   if (inserts.length > 0) {
     await admin.from("locations").insert(inserts);
   }
+  if (zoneEventInserts.length > 0) {
+    await admin.from("zone_events").insert(zoneEventInserts);
+  }
 
-  if (anomalyNotices.length > 0) {
+  if (anomalyNotices.length > 0 || zoneNotices.length > 0) {
     const { data: admins } = await admin
       .from("profiles")
       .select("id")
       .eq("role", "admin")
       .eq("disabled", false);
 
-    const notes = (admins || []).flatMap((a) =>
-      anomalyNotices.map((n) => ({
-        user_id: a.id,
-        message: `Anomaly: ${n.kind.replace("_", " ")} on vehicle ${n.vehicle_id.slice(0, 8)}…`,
-        link: `/vehicles/${n.vehicle_id}`,
-      })),
-    );
+    const adminIds = (admins ?? []).map((a) => a.id as string);
+
+    const notes: Array<{ user_id: string; message: string; link: string }> = [];
+    for (const a of adminIds) {
+      for (const n of anomalyNotices) {
+        notes.push({
+          user_id: a,
+          message: `Anomaly: ${n.kind.replace("_", " ")} on vehicle ${n.vehicle_id.slice(0, 8)}…`,
+          link: `/vehicles/${n.vehicle_id}`,
+        });
+      }
+      for (const z of zoneNotices) {
+        const prefix = z.is_prohibited && z.kind === "enter" ? "⚠ Prohibited" : "Geofence";
+        notes.push({
+          user_id: a,
+          message: `${prefix}: vehicle ${z.vehicle_id.slice(0, 8)}… ${z.kind === "enter" ? "entered" : "exited"} "${z.zone_name}"`,
+          link: `/vehicles/${z.vehicle_id}`,
+        });
+      }
+    }
     if (notes.length > 0) {
       await admin.from("notifications").insert(notes);
     }
@@ -154,5 +241,6 @@ async function run(request: NextRequest) {
   return NextResponse.json({
     pings: inserts.length,
     anomalies: anomalyNotices.length,
+    zone_events: zoneEventInserts.length,
   });
 }

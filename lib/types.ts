@@ -1,6 +1,9 @@
 export type UserRole = "user" | "admin";
 export type VehicleStatus = "active" | "idle" | "offline" | "maintenance";
 export type ReportStatus = "open" | "resolved" | "dismissed";
+export type ZoneKind = "circle" | "rectangle" | "polygon";
+export type ZoneAlertOn = "enter" | "exit" | "both";
+export type ZoneEventKind = "enter" | "exit";
 
 export interface Profile {
   id: string;
@@ -79,4 +82,28 @@ export interface FleetMetrics {
   active_vehicles: number;
   anomalies_24h: number;
   open_reports: number;
+}
+
+export interface Zone {
+  id: string;
+  name: string;
+  description: string | null;
+  kind: ZoneKind;
+  shape: Record<string, unknown>; // narrowed at use sites via lib/geofencing types
+  is_prohibited: boolean;
+  alert_on: ZoneAlertOn;
+  created_by: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ZoneEvent {
+  id: number;
+  zone_id: string;
+  vehicle_id: string;
+  kind: ZoneEventKind;
+  lat: number;
+  lng: number;
+  created_at: string;
 }

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Vehicle } from "@/lib/types";
+import type { Vehicle, Zone } from "@/lib/types";
 
 const RealtimeMap = dynamic(
   () => import("./realtime-map").then((m) => m.RealtimeMap),
@@ -14,10 +14,18 @@ const RealtimeMap = dynamic(
 
 export function RealtimeMapLoader({
   initialVehicles,
+  initialZones,
   height,
 }: {
   initialVehicles: Vehicle[];
+  initialZones?: Zone[];
   height?: number;
 }) {
-  return <RealtimeMap initialVehicles={initialVehicles} height={height} />;
+  return (
+    <RealtimeMap
+      initialVehicles={initialVehicles}
+      initialZones={initialZones}
+      height={height}
+    />
+  );
 }

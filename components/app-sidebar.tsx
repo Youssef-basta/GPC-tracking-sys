@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   BarChart3,
   FileBarChart,
+  Map as MapIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
@@ -24,6 +25,7 @@ const userNav = [
 const adminNav = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/content", label: "Content", icon: ShieldAlert },
+  { href: "/admin/zones", label: "Zones", icon: MapIcon },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/reports", label: "Reports", icon: FileBarChart },
 ];

@@ -2,6 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { detectAnomaly } from "@/lib/anomaly";
+import {
+  detectZoneCrossings,
+  type ZoneKind,
+  type ZoneShape,
+} from "@/lib/geofencing";
 
 /**
  * GPS ingest endpoint for real devices / trackers.
@@ -103,20 +108,102 @@ export async function POST(request: NextRequest) {
     return new NextResponse(insErr.message, { status: 500 });
   }
 
+  // Geofence crossings — compare the first and last ping of this batch
+  // against the previous known position.
+  const { data: zonesData } = await admin
+    .from("zones")
+    .select("id, name, kind, shape, is_prohibited, alert_on")
+    .is("deleted_at", null);
+  const zones = (zonesData ?? []) as Array<{
+    id: string;
+    name: string;
+    kind: ZoneKind;
+    shape: ZoneShape;
+    is_prohibited: boolean;
+    alert_on: "enter" | "exit" | "both";
+  }>;
+
+  const zoneEventInserts: Array<{
+    zone_id: string;
+    vehicle_id: string;
+    kind: "enter" | "exit";
+    lat: number;
+    lng: number;
+  }> = [];
+  const zoneNotices: { zone_name: string; kind: "enter" | "exit"; is_prohibited: boolean }[] = [];
+
+  if (zones.length > 0) {
+    const prevPos: [number, number] | null =
+      vehicle.last_lat != null && vehicle.last_lng != null
+        ? [vehicle.last_lat, vehicle.last_lng]
+        : null;
+    const lastPing = inserts[inserts.length - 1];
+    const newPos: [number, number] = [lastPing.lat, lastPing.lng];
+    const { entered, exited } = detectZoneCrossings(prevPos, newPos, zones);
+    for (const z of entered) {
+      zoneEventInserts.push({
+        zone_id: z.id,
+        vehicle_id: vehicle.id,
+        kind: "enter",
+        lat: newPos[0],
+        lng: newPos[1],
+      });
+      if (z.alert_on === "enter" || z.alert_on === "both") {
+        zoneNotices.push({
+          zone_name: z.name,
+          kind: "enter",
+          is_prohibited: z.is_prohibited,
+        });
+      }
+    }
+    for (const z of exited) {
+      zoneEventInserts.push({
+        zone_id: z.id,
+        vehicle_id: vehicle.id,
+        kind: "exit",
+        lat: newPos[0],
+        lng: newPos[1],
+      });
+      if (z.alert_on === "exit" || z.alert_on === "both") {
+        zoneNotices.push({
+          zone_name: z.name,
+          kind: "exit",
+          is_prohibited: z.is_prohibited,
+        });
+      }
+    }
+    if (zoneEventInserts.length > 0) {
+      await admin.from("zone_events").insert(zoneEventInserts);
+    }
+  }
+
   const anomalies = inserts.filter((r) => r.anomaly);
-  if (anomalies.length > 0) {
+  if (anomalies.length > 0 || zoneNotices.length > 0) {
     const { data: admins } = await admin
       .from("profiles")
       .select("id")
       .eq("role", "admin")
       .eq("disabled", false);
-    const notes = (admins || []).flatMap((a) =>
-      anomalies.map((p) => ({
-        user_id: a.id,
-        message: `Anomaly (${p.anomaly_kind}) on vehicle ${vehicle.id.slice(0, 8)}…`,
-        link: `/vehicles/${vehicle.id}`,
-      })),
-    );
+    const adminIds = (admins ?? []).map((a) => a.id as string);
+    const notes: Array<{ user_id: string; message: string; link: string }> = [];
+    for (const a of adminIds) {
+      for (const p of anomalies) {
+        notes.push({
+          user_id: a,
+          message: `Anomaly (${p.anomaly_kind}) on vehicle ${vehicle.id.slice(0, 8)}…`,
+          link: `/vehicles/${vehicle.id}`,
+        });
+      }
+      for (const z of zoneNotices) {
+        const prefix =
+          z.is_prohibited && z.kind === "enter" ? "⚠ Prohibited" : "Geofence";
+        notes.push({
+          user_id: a,
+          message: `${prefix}: vehicle ${vehicle.id.slice(0, 8)}… ${z.kind === "enter" ? "entered" : "exited"} "${z.zone_name}"`,
+          link: `/vehicles/${vehicle.id}`,
+        });
+      }
+    }
     if (notes.length > 0) await admin.from("notifications").insert(notes);
   }
 
@@ -124,5 +211,6 @@ export async function POST(request: NextRequest) {
     ok: true,
     accepted: inserts.length,
     anomalies: anomalies.length,
+    zone_events: zoneEventInserts.length,
   });
 }

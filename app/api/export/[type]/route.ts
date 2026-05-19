@@ -1,6 +1,45 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { csvResponse, timestampedFilename, toCSV } from "@/lib/csv";
+import {
+  buildPdfReport,
+  pdfResponse,
+  timestampedPdfFilename,
+} from "@/lib/pdf";
+
+// Each report tab has the same column set in both CSV and PDF. We use a single
+// table of column definitions and dispatch the renderer by the `?format=`
+// query param (`csv` default, or `pdf`).
+type Col<K extends string = string> = {
+  key: K;
+  header: string;
+  align?: "left" | "right" | "center";
+};
+
+function renderTabular(
+  format: "csv" | "pdf",
+  rows: Record<string, unknown>[],
+  cols: Col[],
+  filename: string,
+  pdfOpts: { title: string; subtitle?: string; meta?: { label: string; value: string }[] },
+) {
+  if (format === "pdf") {
+    const bytes = buildPdfReport({
+      title: pdfOpts.title,
+      subtitle: pdfOpts.subtitle,
+      meta: pdfOpts.meta,
+      columns: cols.map((c) => ({
+        header: c.header,
+        dataKey: c.key,
+        align: c.align,
+      })),
+      rows,
+    });
+    return pdfResponse(bytes, timestampedPdfFilename(filename));
+  }
+  const csv = toCSV(rows, cols);
+  return csvResponse(csv, timestampedFilename(filename));
+}
 
 type Exportable =
   | "users"
@@ -53,6 +92,8 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q");
   const role = searchParams.get("role");
+  const format: "csv" | "pdf" =
+    searchParams.get("format") === "pdf" ? "pdf" : "csv";
 
   if (type === "users") {
     let query = supabase
@@ -179,22 +220,34 @@ export async function GET(
       ? `${from.toISOString().slice(0, 10)}_to_${to.toISOString().slice(0, 10)}`
       : `${days}d`;
 
+    const rangeMeta = [
+      {
+        label: "Range",
+        value: `${from.toISOString().slice(0, 10)} → ${to.toISOString().slice(0, 10)}`,
+      },
+    ];
+
     if (type === "report-activity") {
       const { data, error } = await supabase.rpc("report_vehicle_activity", range);
       if (error) return new NextResponse(error.message, { status: 500 });
-      const csv = toCSV(data || [], [
-        { key: "plate", header: "Plate" },
-        { key: "label", header: "Label" },
-        { key: "driver_name", header: "Driver" },
-        { key: "ping_count", header: "Pings" },
-        { key: "distance_km", header: "Distance (km)" },
-        { key: "max_speed_kmh", header: "Max speed (km/h)" },
-        { key: "avg_moving_kmh", header: "Avg moving (km/h)" },
-        { key: "total_idle_seconds", header: "Total idle (s)" },
-        { key: "anomaly_count", header: "Anomalies" },
-        { key: "last_seen", header: "Last seen" },
-      ]);
-      return csvResponse(csv, timestampedFilename(`activity-${rangeSlug}`));
+      return renderTabular(
+        format,
+        (data || []) as Record<string, unknown>[],
+        [
+          { key: "plate", header: "Plate" },
+          { key: "label", header: "Label" },
+          { key: "driver_name", header: "Driver" },
+          { key: "ping_count", header: "Pings", align: "right" },
+          { key: "distance_km", header: "Distance (km)", align: "right" },
+          { key: "max_speed_kmh", header: "Max speed (km/h)", align: "right" },
+          { key: "avg_moving_kmh", header: "Avg moving (km/h)", align: "right" },
+          { key: "total_idle_seconds", header: "Total idle (s)", align: "right" },
+          { key: "anomaly_count", header: "Anomalies", align: "right" },
+          { key: "last_seen", header: "Last seen" },
+        ],
+        `activity-${rangeSlug}`,
+        { title: "Activity summary", subtitle: "Per-vehicle activity report", meta: rangeMeta },
+      );
     }
 
     if (type === "report-speed") {
@@ -204,18 +257,24 @@ export async function GET(
         max_rows: 5000,
       });
       if (error) return new NextResponse(error.message, { status: 500 });
-      const csv = toCSV(data || [], [
-        { key: "created_at", header: "When" },
-        { key: "plate", header: "Plate" },
-        { key: "label", header: "Label" },
-        { key: "driver_name", header: "Driver" },
-        { key: "speed_kmh", header: "Speed (km/h)" },
-        { key: "lat", header: "Lat" },
-        { key: "lng", header: "Lng" },
-      ]);
-      return csvResponse(
-        csv,
-        timestampedFilename(`speed-violations-${threshold}kmh-${rangeSlug}`),
+      return renderTabular(
+        format,
+        (data || []) as Record<string, unknown>[],
+        [
+          { key: "created_at", header: "When" },
+          { key: "plate", header: "Plate" },
+          { key: "label", header: "Label" },
+          { key: "driver_name", header: "Driver" },
+          { key: "speed_kmh", header: "Speed (km/h)", align: "right" },
+          { key: "lat", header: "Lat", align: "right" },
+          { key: "lng", header: "Lng", align: "right" },
+        ],
+        `speed-violations-${threshold}kmh-${rangeSlug}`,
+        {
+          title: "Speed violations",
+          subtitle: `Pings above ${threshold} km/h`,
+          meta: rangeMeta,
+        },
       );
     }
 
@@ -226,33 +285,48 @@ export async function GET(
         max_rows: 5000,
       });
       if (error) return new NextResponse(error.message, { status: 500 });
-      const csv = toCSV(data || [], [
-        { key: "created_at", header: "When" },
-        { key: "plate", header: "Plate" },
-        { key: "label", header: "Label" },
-        { key: "driver_name", header: "Driver" },
-        { key: "idle_seconds", header: "Idle (s)" },
-        { key: "lat", header: "Lat" },
-        { key: "lng", header: "Lng" },
-      ]);
-      return csvResponse(
-        csv,
-        timestampedFilename(`idle-events-${minIdle}s-${rangeSlug}`),
+      return renderTabular(
+        format,
+        (data || []) as Record<string, unknown>[],
+        [
+          { key: "created_at", header: "When" },
+          { key: "plate", header: "Plate" },
+          { key: "label", header: "Label" },
+          { key: "driver_name", header: "Driver" },
+          { key: "idle_seconds", header: "Idle (s)", align: "right" },
+          { key: "lat", header: "Lat", align: "right" },
+          { key: "lng", header: "Lng", align: "right" },
+        ],
+        `idle-events-${minIdle}s-${rangeSlug}`,
+        {
+          title: "Idle events",
+          subtitle: `Pings idle ≥ ${minIdle}s`,
+          meta: rangeMeta,
+        },
       );
     }
 
     if (type === "report-anomalies") {
       const { data, error } = await supabase.rpc("report_anomalies", range);
       if (error) return new NextResponse(error.message, { status: 500 });
-      const csv = toCSV(data || [], [
-        { key: "plate", header: "Plate" },
-        { key: "label", header: "Label" },
-        { key: "driver_name", header: "Driver" },
-        { key: "anomaly_kind", header: "Kind" },
-        { key: "occurrences", header: "Occurrences" },
-        { key: "last_occurrence", header: "Last occurrence" },
-      ]);
-      return csvResponse(csv, timestampedFilename(`anomalies-${rangeSlug}`));
+      return renderTabular(
+        format,
+        (data || []) as Record<string, unknown>[],
+        [
+          { key: "plate", header: "Plate" },
+          { key: "label", header: "Label" },
+          { key: "driver_name", header: "Driver" },
+          { key: "anomaly_kind", header: "Kind" },
+          { key: "occurrences", header: "Occurrences", align: "right" },
+          { key: "last_occurrence", header: "Last occurrence" },
+        ],
+        `anomalies-${rangeSlug}`,
+        {
+          title: "Anomalies",
+          subtitle: "Long-idle + route-jump events grouped by vehicle",
+          meta: rangeMeta,
+        },
+      );
     }
 
     if (type === "report-audit") {
@@ -268,15 +342,20 @@ export async function GET(
         ...r,
         meta: r.meta ? JSON.stringify(r.meta) : "",
       }));
-      const csv = toCSV(rows, [
-        { key: "created_at", header: "When" },
-        { key: "actor_id", header: "Actor" },
-        { key: "action", header: "Action" },
-        { key: "target_type", header: "Target type" },
-        { key: "target_id", header: "Target ID" },
-        { key: "meta", header: "Meta" },
-      ]);
-      return csvResponse(csv, timestampedFilename(`audit-${rangeSlug}`));
+      return renderTabular(
+        format,
+        rows as Record<string, unknown>[],
+        [
+          { key: "created_at", header: "When" },
+          { key: "actor_id", header: "Actor" },
+          { key: "action", header: "Action" },
+          { key: "target_type", header: "Target type" },
+          { key: "target_id", header: "Target ID" },
+          { key: "meta", header: "Meta" },
+        ],
+        `audit-${rangeSlug}`,
+        { title: "Audit trail", subtitle: "Admin mutations", meta: rangeMeta },
+      );
     }
   }
 

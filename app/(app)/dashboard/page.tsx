@@ -4,20 +4,20 @@ import { RealtimeStatus } from "@/components/realtime-status";
 import { StatusCounts } from "@/components/status-counts";
 import { SimulateButton } from "@/components/simulate-button";
 import { PageTitle } from "@/components/page-title";
-import type { Vehicle } from "@/lib/types";
+import type { Vehicle, Zone } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const { profile, supabase } = await requireProfile();
 
-  const { data: vehicles } = await supabase
-    .from("vehicles")
-    .select("*")
-    .is("deleted_at", null)
-    .order("label");
+  const [{ data: vehicles }, { data: zones }] = await Promise.all([
+    supabase.from("vehicles").select("*").is("deleted_at", null).order("label"),
+    supabase.from("zones").select("*").is("deleted_at", null).order("name"),
+  ]);
 
   const list = (vehicles ?? []) as Vehicle[];
+  const zoneList = (zones ?? []) as Zone[];
 
   return (
     <div className="space-y-6">
@@ -36,7 +36,7 @@ export default async function DashboardPage() {
 
       <StatusCounts vehicles={list} />
 
-      <RealtimeMapLoader initialVehicles={list} />
+      <RealtimeMapLoader initialVehicles={list} initialZones={zoneList} />
     </div>
   );
 }
