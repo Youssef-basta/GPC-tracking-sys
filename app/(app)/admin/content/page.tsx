@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageTitle } from "@/components/page-title";
+import { AddVehicleDialog } from "@/components/add-vehicle-dialog";
 import {
   Table,
   TableBody,
@@ -49,6 +50,7 @@ export default async function AdminContentPage() {
             {openReports} open report{openReports === 1 ? "" : "s"} · {vehicles.length} vehicles total
           </p>
         </div>
+        <AddVehicleDialog />
       </div>
 
       <Tabs defaultValue="vehicles">

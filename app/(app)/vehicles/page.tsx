@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageTitle } from "@/components/page-title";
+import { AddVehicleDialog } from "@/components/add-vehicle-dialog";
 import {
   Table,
   TableBody,
@@ -28,7 +29,7 @@ export default async function VehiclesPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const { supabase } = await requireProfile();
+  const { profile, supabase } = await requireProfile();
   const { q } = await searchParams;
 
   let query = supabase
@@ -46,13 +47,14 @@ export default async function VehiclesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <PageTitle>Vehicles</PageTitle>
           <p className="text-sm text-muted-foreground">
             {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"}
           </p>
         </div>
+        {profile.role === "admin" && <AddVehicleDialog />}
       </div>
 
       <form className="flex gap-2">
