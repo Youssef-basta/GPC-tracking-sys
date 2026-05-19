@@ -18,7 +18,9 @@ import type { UserRole } from "@/lib/types";
 const userNav = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/vehicles", label: "Vehicles" },
+  { href: "/pois", label: "Places" },
   { href: "/notifications", label: "Notifications" },
+  { href: "/settings", label: "Settings" },
 ];
 const adminNav = [
   { href: "/admin/users", label: "Users" },

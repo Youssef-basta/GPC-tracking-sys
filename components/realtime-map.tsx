@@ -14,7 +14,8 @@ import {
   Rectangle,
 } from "react-leaflet";
 import { createClient } from "@/lib/supabase/client";
-import type { Vehicle, Zone } from "@/lib/types";
+import type { Vehicle, Zone, Poi } from "@/lib/types";
+import { categoryMeta } from "@/lib/poi";
 import { formatDistanceToNow } from "date-fns";
 
 // Fix default marker icons in webpack/turbopack builds
@@ -34,6 +35,16 @@ function buildIcon(status: string) {
     className: "",
     iconSize: [18, 18],
     iconAnchor: [9, 9],
+  });
+}
+
+function buildPoiIcon(color: string, emoji: string) {
+  const html = `<div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50% 50% 50% 0;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);transform:rotate(-45deg);"><span style="transform:rotate(45deg);font-size:14px;line-height:1;">${emoji}</span></div>`;
+  return L.divIcon({
+    html,
+    className: "",
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
   });
 }
 
@@ -80,14 +91,17 @@ function ZonePopup({ zone }: { zone: Zone }) {
 export function RealtimeMap({
   initialVehicles,
   initialZones = [],
+  initialPois = [],
   height = 520,
 }: {
   initialVehicles: Vehicle[];
   initialZones?: Zone[];
+  initialPois?: Poi[];
   height?: number;
 }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
   const [zones, setZones] = useState<Zone[]>(initialZones);
+  const [pois, setPois] = useState<Poi[]>(initialPois);
 
   useEffect(() => {
     const supabase = createClient();
@@ -133,6 +147,28 @@ export function RealtimeMap({
             .select("*")
             .is("deleted_at", null);
           if (data) setZones(data as Zone[]);
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Realtime updates for POIs — same pattern, small dataset
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("pois-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pois" },
+        async () => {
+          const { data } = await supabase
+            .from("pois")
+            .select("*")
+            .is("deleted_at", null);
+          if (data) setPois(data as Poi[]);
         },
       )
       .subscribe();
@@ -215,6 +251,35 @@ export function RealtimeMap({
             );
           }
           return null;
+        })}
+
+        {/* POI markers */}
+        {pois.map((p) => {
+          const meta = categoryMeta(p.category);
+          return (
+            <Marker
+              key={`poi-${p.id}`}
+              position={[p.lat, p.lng]}
+              icon={buildPoiIcon(p.icon_color, meta.emoji)}
+            >
+              <Popup>
+                <div className="space-y-0.5 text-sm">
+                  <div className="font-semibold">
+                    {meta.emoji} {p.name}
+                  </div>
+                  <div className="text-xs capitalize text-muted-foreground">
+                    {meta.label}
+                    {!p.is_public && " · private"}
+                  </div>
+                  {p.description && (
+                    <div className="text-xs text-muted-foreground">
+                      {p.description}
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          );
         })}
 
         {vehicles

@@ -12,6 +12,8 @@ import {
   BarChart3,
   FileBarChart,
   Map as MapIcon,
+  MapPin,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
@@ -19,7 +21,9 @@ import type { UserRole } from "@/lib/types";
 const userNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/vehicles", label: "Vehicles", icon: Truck },
+  { href: "/pois", label: "Places", icon: MapPin },
   { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 const adminNav = [

@@ -4,6 +4,16 @@ export type ReportStatus = "open" | "resolved" | "dismissed";
 export type ZoneKind = "circle" | "rectangle" | "polygon";
 export type ZoneAlertOn = "enter" | "exit" | "both";
 export type ZoneEventKind = "enter" | "exit";
+export type PoiCategory =
+  | "depot"
+  | "customer"
+  | "fuel"
+  | "service"
+  | "hospital"
+  | "police"
+  | "landmark"
+  | "other";
+export type Units = "metric" | "imperial";
 
 export interface Profile {
   id: string;
@@ -106,4 +116,29 @@ export interface ZoneEvent {
   lat: number;
   lng: number;
   created_at: string;
+}
+
+export interface Poi {
+  id: string;
+  name: string;
+  description: string | null;
+  category: PoiCategory;
+  icon_color: string;
+  lat: number;
+  lng: number;
+  is_public: boolean;
+  created_by: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserSettings {
+  user_id: string;
+  units: Units;
+  language: string;
+  default_zoom: number;
+  show_trails: boolean;
+  trail_points: number;
+  updated_at: string;
 }
