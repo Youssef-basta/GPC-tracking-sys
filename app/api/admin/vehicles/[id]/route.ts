@@ -9,6 +9,7 @@ const patchSchema = z.object({
   label: z.string().trim().min(1).max(80).optional(),
   model: z.string().trim().max(80).nullable().optional(),
   description: z.string().trim().max(500).nullable().optional(),
+  driver_name: z.string().trim().max(80).nullable().optional(),
   status: z.enum(["active", "idle", "offline", "maintenance"]).optional(),
   last_lat: z.number().gte(-90).lte(90).nullable().optional(),
   last_lng: z.number().gte(-180).lte(180).nullable().optional(),

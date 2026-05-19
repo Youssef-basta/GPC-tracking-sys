@@ -400,6 +400,7 @@ interface ActivityRow {
   vehicle_id: string;
   plate: string;
   label: string;
+  driver_name: string | null;
   ping_count: number;
   distance_km: number;
   max_speed_kmh: number;
@@ -431,6 +432,7 @@ async function ActivityReport({
       <TableHeader>
         <TableRow>
           <TableHead>Vehicle</TableHead>
+          <TableHead>Driver</TableHead>
           <TableHead className="text-right">Pings</TableHead>
           <TableHead className="text-right">Distance</TableHead>
           <TableHead className="text-right">Max speed</TableHead>
@@ -453,6 +455,9 @@ async function ActivityReport({
               <div className="font-mono text-xs text-muted-foreground">
                 {r.plate}
               </div>
+            </TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {r.driver_name || "—"}
             </TableCell>
             <TableCell className="text-right tabular-nums">
               {r.ping_count}
@@ -492,6 +497,7 @@ interface SpeedRow {
   vehicle_id: string;
   plate: string;
   label: string;
+  driver_name: string | null;
   speed_kmh: number;
   lat: number;
   lng: number;
@@ -526,6 +532,7 @@ async function SpeedReport({
         <TableRow>
           <TableHead>When</TableHead>
           <TableHead>Vehicle</TableHead>
+          <TableHead>Driver</TableHead>
           <TableHead className="text-right">Speed</TableHead>
           <TableHead>Location</TableHead>
         </TableRow>
@@ -547,6 +554,9 @@ async function SpeedReport({
                 {r.plate}
               </span>
             </TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {r.driver_name || "—"}
+            </TableCell>
             <TableCell className="text-right">
               <Badge variant="destructive" className="tabular-nums">
                 {Number(r.speed_kmh).toFixed(0)} km/h
@@ -566,6 +576,7 @@ interface IdleRow {
   vehicle_id: string;
   plate: string;
   label: string;
+  driver_name: string | null;
   idle_seconds: number;
   lat: number;
   lng: number;
@@ -602,6 +613,7 @@ async function IdleReport({
         <TableRow>
           <TableHead>When</TableHead>
           <TableHead>Vehicle</TableHead>
+          <TableHead>Driver</TableHead>
           <TableHead className="text-right">Idle</TableHead>
           <TableHead>Location</TableHead>
         </TableRow>
@@ -622,6 +634,9 @@ async function IdleReport({
               <span className="font-mono text-xs text-muted-foreground">
                 {r.plate}
               </span>
+            </TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {r.driver_name || "—"}
             </TableCell>
             <TableCell className="text-right">
               <Badge
@@ -645,6 +660,7 @@ interface AnomalyRow {
   vehicle_id: string;
   plate: string;
   label: string;
+  driver_name: string | null;
   anomaly_kind: string;
   occurrences: number;
   last_occurrence: string;
@@ -672,6 +688,7 @@ async function AnomaliesReport({
       <TableHeader>
         <TableRow>
           <TableHead>Vehicle</TableHead>
+          <TableHead>Driver</TableHead>
           <TableHead>Kind</TableHead>
           <TableHead className="text-right">Occurrences</TableHead>
           <TableHead>Last</TableHead>
@@ -690,6 +707,9 @@ async function AnomaliesReport({
               <span className="font-mono text-xs text-muted-foreground">
                 {r.plate}
               </span>
+            </TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {r.driver_name || "—"}
             </TableCell>
             <TableCell>
               <Badge variant="destructive" className="capitalize">

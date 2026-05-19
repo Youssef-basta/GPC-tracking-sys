@@ -39,7 +39,7 @@ export default async function VehiclesPage({
     .order("label");
   if (q) {
     query = query.or(
-      `plate.ilike.%${q}%,label.ilike.%${q}%,model.ilike.%${q}%`,
+      `plate.ilike.%${q}%,label.ilike.%${q}%,model.ilike.%${q}%,driver_name.ilike.%${q}%`,
     );
   }
   const { data } = await query;
@@ -61,7 +61,7 @@ export default async function VehiclesPage({
         <Input
           name="q"
           defaultValue={q || ""}
-          placeholder="Search by plate, label, or model"
+          placeholder="Search by plate, label, model, or driver"
           className="max-w-sm"
         />
       </form>
@@ -72,6 +72,7 @@ export default async function VehiclesPage({
             <TableRow>
               <TableHead>Plate</TableHead>
               <TableHead>Label</TableHead>
+              <TableHead>Driver</TableHead>
               <TableHead>Model</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Last seen</TableHead>
@@ -82,7 +83,7 @@ export default async function VehiclesPage({
             {vehicles.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={profile.role === "admin" ? 6 : 5}
+                  colSpan={profile.role === "admin" ? 7 : 6}
                   className="py-8 text-center text-muted-foreground"
                 >
                   No vehicles yet. Run the seed migration to add demo data.
@@ -97,6 +98,9 @@ export default async function VehiclesPage({
                     </Link>
                   </TableCell>
                   <TableCell>{v.label}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {v.driver_name || "—"}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {v.model || "—"}
                   </TableCell>

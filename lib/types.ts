@@ -19,6 +19,7 @@ export interface Vehicle {
   model: string | null;
   status: VehicleStatus;
   description: string | null;
+  driver_name: string | null;
   owner_id: string | null;
   last_lat: number | null;
   last_lng: number | null;

@@ -33,6 +33,7 @@ const schema = z.object({
   plate: z.string().trim().min(1, "Plate is required").max(40),
   label: z.string().trim().min(1, "Label is required").max(80),
   model: z.string().trim().max(80).optional(),
+  driver_name: z.string().trim().max(80).optional(),
   description: z.string().trim().max(500).optional(),
   status: z.enum(["active", "idle", "offline", "maintenance"]),
   last_lat: z.string().optional(),
@@ -63,6 +64,7 @@ export function VehicleDialog(props: Props) {
       plate: v?.plate ?? "",
       label: v?.label ?? "",
       model: v?.model ?? "",
+      driver_name: v?.driver_name ?? "",
       description: v?.description ?? "",
       status: v?.status ?? "offline",
       last_lat: v?.last_lat?.toString() ?? "",
@@ -77,6 +79,7 @@ export function VehicleDialog(props: Props) {
         plate: v.plate,
         label: v.label,
         model: v.model ?? "",
+        driver_name: v.driver_name ?? "",
         description: v.description ?? "",
         status: v.status,
         last_lat: v.last_lat?.toString() ?? "",
@@ -91,6 +94,7 @@ export function VehicleDialog(props: Props) {
       plate: values.plate,
       label: values.label,
       model: values.model || (isEdit ? null : undefined),
+      driver_name: values.driver_name || (isEdit ? null : undefined),
       description: values.description || (isEdit ? null : undefined),
       status: values.status,
       last_lat: values.last_lat ? Number(values.last_lat) : null,
@@ -169,9 +173,19 @@ export function VehicleDialog(props: Props) {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="model">Model</Label>
-            <Input id="model" {...register("model")} placeholder="Toyota Hilux" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="model">Model</Label>
+              <Input id="model" {...register("model")} placeholder="Toyota Hilux" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="driver_name">Driver name</Label>
+              <Input
+                id="driver_name"
+                {...register("driver_name")}
+                placeholder="Ahmed Ali"
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">

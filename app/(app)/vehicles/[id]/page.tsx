@@ -89,6 +89,12 @@ export default async function VehicleDetailPage({
             {vehicle.plate}
             {vehicle.model && <> · {vehicle.model}</>}
           </p>
+          {vehicle.driver_name && (
+            <p className="mt-1 text-sm">
+              <span className="text-muted-foreground">Driver:</span>{" "}
+              <span className="font-medium">{vehicle.driver_name}</span>
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Badge className="capitalize">{vehicle.status}</Badge>

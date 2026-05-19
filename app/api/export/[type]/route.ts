@@ -77,13 +77,14 @@ export async function GET(
   if (type === "vehicles") {
     const { data, error } = await supabase
       .from("vehicles")
-      .select("id, plate, label, model, status, last_lat, last_lng, last_seen_at, deleted_at, created_at")
+      .select("id, plate, label, model, driver_name, status, last_lat, last_lng, last_seen_at, deleted_at, created_at")
       .order("created_at", { ascending: false });
     if (error) return new NextResponse(error.message, { status: 500 });
     const csv = toCSV(data || [], [
       { key: "id", header: "ID" },
       { key: "plate", header: "Plate" },
       { key: "label", header: "Label" },
+      { key: "driver_name", header: "Driver" },
       { key: "model", header: "Model" },
       { key: "status", header: "Status" },
       { key: "last_lat", header: "Last lat" },
@@ -184,6 +185,7 @@ export async function GET(
       const csv = toCSV(data || [], [
         { key: "plate", header: "Plate" },
         { key: "label", header: "Label" },
+        { key: "driver_name", header: "Driver" },
         { key: "ping_count", header: "Pings" },
         { key: "distance_km", header: "Distance (km)" },
         { key: "max_speed_kmh", header: "Max speed (km/h)" },
@@ -206,6 +208,7 @@ export async function GET(
         { key: "created_at", header: "When" },
         { key: "plate", header: "Plate" },
         { key: "label", header: "Label" },
+        { key: "driver_name", header: "Driver" },
         { key: "speed_kmh", header: "Speed (km/h)" },
         { key: "lat", header: "Lat" },
         { key: "lng", header: "Lng" },
@@ -227,6 +230,7 @@ export async function GET(
         { key: "created_at", header: "When" },
         { key: "plate", header: "Plate" },
         { key: "label", header: "Label" },
+        { key: "driver_name", header: "Driver" },
         { key: "idle_seconds", header: "Idle (s)" },
         { key: "lat", header: "Lat" },
         { key: "lng", header: "Lng" },
@@ -243,6 +247,7 @@ export async function GET(
       const csv = toCSV(data || [], [
         { key: "plate", header: "Plate" },
         { key: "label", header: "Label" },
+        { key: "driver_name", header: "Driver" },
         { key: "anomaly_kind", header: "Kind" },
         { key: "occurrences", header: "Occurrences" },
         { key: "last_occurrence", header: "Last occurrence" },

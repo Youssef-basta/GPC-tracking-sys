@@ -131,6 +131,11 @@ export function RealtimeMap({
                     {v.label}{" "}
                     <span className="text-muted-foreground">({v.plate})</span>
                   </div>
+                  {v.driver_name && (
+                    <div className="text-xs">
+                      Driver: <span className="font-medium">{v.driver_name}</span>
+                    </div>
+                  )}
                   <div className="text-xs capitalize">Status: {v.status}</div>
                   {v.last_seen_at && (
                     <div className="text-xs text-muted-foreground">
