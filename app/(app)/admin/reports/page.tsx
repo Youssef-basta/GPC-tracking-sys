@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -64,12 +65,25 @@ function formatSeconds(s: number): string {
   return `${h}h ${m % 60}m`;
 }
 
+function parseDateInput(s: string | undefined): Date | null {
+  if (!s) return null;
+  // YYYY-MM-DD or full ISO
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function toDateInputValue(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 export default async function ReportsPage({
   searchParams,
 }: {
   searchParams: Promise<{
     type?: string;
     days?: string;
+    from?: string;
+    to?: string;
     threshold?: string;
     min_idle?: string;
   }>;
@@ -80,12 +94,32 @@ export default async function ReportsPage({
   const type = (
     VALID.includes(sp.type as ReportType) ? sp.type : "activity"
   ) as ReportType;
-  const days = Math.max(1, Math.min(365, Number(sp.days) || 7));
   const threshold = Math.max(20, Math.min(300, Number(sp.threshold) || 80));
   const minIdle = Math.max(60, Math.min(7200, Number(sp.min_idle) || 300));
 
-  const to = new Date();
-  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+  // Custom range takes precedence over days preset
+  const customFromDate = parseDateInput(sp.from);
+  const customToDate = parseDateInput(sp.to);
+  const usingCustom = !!(customFromDate || customToDate);
+
+  let from: Date;
+  let to: Date;
+  let days = Math.max(1, Math.min(365, Number(sp.days) || 7));
+
+  if (usingCustom) {
+    to = customToDate ?? new Date();
+    // End-of-day for `to` so the picker is inclusive of the chosen day
+    to = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999);
+    from = customFromDate ?? new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+    from = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0);
+    days = Math.max(
+      1,
+      Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)),
+    );
+  } else {
+    to = new Date();
+    from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+  }
 
   const buildHref = (
     overrides: Partial<{
@@ -93,22 +127,38 @@ export default async function ReportsPage({
       days: number;
       threshold: number;
       min_idle: number;
+      preset: boolean; // when true, clears custom from/to
     }>,
   ) => {
-    const next = new URLSearchParams({
-      type: overrides.type ?? type,
-      days: String(overrides.days ?? days),
-      ...(type === "speed" || overrides.type === "speed"
-        ? { threshold: String(overrides.threshold ?? threshold) }
-        : {}),
-      ...(type === "idle" || overrides.type === "idle"
-        ? { min_idle: String(overrides.min_idle ?? minIdle) }
-        : {}),
-    });
-    return `/admin/reports?${next.toString()}`;
+    const nextType = overrides.type ?? type;
+    const params = new URLSearchParams();
+    params.set("type", nextType);
+    if (overrides.preset || (!usingCustom && !overrides.preset)) {
+      params.set("days", String(overrides.days ?? days));
+    } else {
+      // Preserve custom range when switching tabs
+      if (customFromDate) params.set("from", toDateInputValue(customFromDate));
+      if (customToDate) params.set("to", toDateInputValue(customToDate));
+    }
+    if (nextType === "speed") {
+      params.set("threshold", String(overrides.threshold ?? threshold));
+    }
+    if (nextType === "idle") {
+      params.set("min_idle", String(overrides.min_idle ?? minIdle));
+    }
+    return `/admin/reports?${params.toString()}`;
   };
 
-  const exportHref = `/api/export/report-${type}?days=${days}&threshold=${threshold}&min_idle=${minIdle}`;
+  const exportParams = new URLSearchParams();
+  if (usingCustom) {
+    exportParams.set("from", from.toISOString());
+    exportParams.set("to", to.toISOString());
+  } else {
+    exportParams.set("days", String(days));
+  }
+  if (type === "speed") exportParams.set("threshold", String(threshold));
+  if (type === "idle") exportParams.set("min_idle", String(minIdle));
+  const exportHref = `/api/export/report-${type}?${exportParams.toString()}`;
 
   return (
     <div className="space-y-6">
@@ -148,19 +198,20 @@ export default async function ReportsPage({
 
       {/* Filters */}
       <Card>
-        <CardContent className="flex flex-wrap items-center gap-4 py-4">
-          <div className="flex items-center gap-2">
+        <CardContent className="flex flex-wrap items-end gap-x-4 gap-y-3 py-4">
+          {/* Presets */}
+          <div className="flex flex-col gap-1">
             <span className="text-xs uppercase tracking-wider text-muted-foreground">
-              Range
+              Quick range
             </span>
             <div className="flex gap-1">
               {PRESETS.map((p) => (
                 <Link
                   key={p.days}
-                  href={buildHref({ days: p.days })}
+                  href={buildHref({ days: p.days, preset: true })}
                   className={cn(
-                    "rounded-md border px-2.5 py-1 text-xs",
-                    days === p.days
+                    "rounded-md border px-2.5 py-1.5 text-xs",
+                    !usingCustom && days === p.days
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border hover:bg-accent/60",
                   )}
@@ -170,6 +221,72 @@ export default async function ReportsPage({
               ))}
             </div>
           </div>
+
+          {/* Custom range picker */}
+          <form
+            action="/admin/reports"
+            method="get"
+            className="flex flex-wrap items-end gap-2"
+          >
+            <input type="hidden" name="type" value={type} />
+            {type === "speed" && (
+              <input type="hidden" name="threshold" value={threshold} />
+            )}
+            {type === "idle" && (
+              <input type="hidden" name="min_idle" value={minIdle} />
+            )}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="from"
+                className="text-xs uppercase tracking-wider text-muted-foreground"
+              >
+                From
+              </label>
+              <Input
+                id="from"
+                name="from"
+                type="date"
+                defaultValue={
+                  customFromDate
+                    ? toDateInputValue(customFromDate)
+                    : toDateInputValue(from)
+                }
+                max={toDateInputValue(new Date())}
+                className="h-8 w-40 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="to"
+                className="text-xs uppercase tracking-wider text-muted-foreground"
+              >
+                To
+              </label>
+              <Input
+                id="to"
+                name="to"
+                type="date"
+                defaultValue={
+                  customToDate
+                    ? toDateInputValue(customToDate)
+                    : toDateInputValue(to)
+                }
+                max={toDateInputValue(new Date())}
+                className="h-8 w-40 text-sm"
+              />
+            </div>
+            <Button type="submit" size="sm" variant="outline" className="h-8">
+              Apply range
+            </Button>
+            {usingCustom && (
+              <Link
+                href={buildHref({ days: 7, preset: true })}
+                className="text-xs text-muted-foreground underline hover:text-foreground"
+              >
+                Clear
+              </Link>
+            )}
+          </form>
 
           {type === "speed" && (
             <div className="flex items-center gap-2">
@@ -220,7 +337,10 @@ export default async function ReportsPage({
           )}
 
           <div className="ml-auto text-xs text-muted-foreground">
-            {from.toLocaleDateString()} → {to.toLocaleDateString()}
+            <Badge variant="outline" className="font-normal">
+              {from.toLocaleDateString()} → {to.toLocaleDateString()}
+              {usingCustom ? " · custom" : ` · ${days}d preset`}
+            </Badge>
           </div>
         </CardContent>
       </Card>

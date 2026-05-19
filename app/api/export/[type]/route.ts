@@ -154,9 +154,29 @@ export async function GET(
       60,
       Math.min(7200, Number(searchParams.get("min_idle")) || 300),
     );
-    const to = new Date();
-    const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+
+    // Custom from/to take precedence over the `days` preset
+    const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+    let from: Date;
+    let to: Date;
+    if (fromParam || toParam) {
+      to = toParam ? new Date(toParam) : new Date();
+      from = fromParam
+        ? new Date(fromParam)
+        : new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+      if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+        return new NextResponse("Invalid from/to", { status: 400 });
+      }
+    } else {
+      to = new Date();
+      from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+    }
     const range = { date_from: from.toISOString(), date_to: to.toISOString() };
+    // Filename-friendly slug for the range
+    const rangeSlug = fromParam || toParam
+      ? `${from.toISOString().slice(0, 10)}_to_${to.toISOString().slice(0, 10)}`
+      : `${days}d`;
 
     if (type === "report-activity") {
       const { data, error } = await supabase.rpc("report_vehicle_activity", range);
@@ -172,7 +192,7 @@ export async function GET(
         { key: "anomaly_count", header: "Anomalies" },
         { key: "last_seen", header: "Last seen" },
       ]);
-      return csvResponse(csv, timestampedFilename(`activity-${days}d`));
+      return csvResponse(csv, timestampedFilename(`activity-${rangeSlug}`));
     }
 
     if (type === "report-speed") {
@@ -192,7 +212,7 @@ export async function GET(
       ]);
       return csvResponse(
         csv,
-        timestampedFilename(`speed-violations-${threshold}kmh-${days}d`),
+        timestampedFilename(`speed-violations-${threshold}kmh-${rangeSlug}`),
       );
     }
 
@@ -213,7 +233,7 @@ export async function GET(
       ]);
       return csvResponse(
         csv,
-        timestampedFilename(`idle-events-${minIdle}s-${days}d`),
+        timestampedFilename(`idle-events-${minIdle}s-${rangeSlug}`),
       );
     }
 
@@ -227,7 +247,7 @@ export async function GET(
         { key: "occurrences", header: "Occurrences" },
         { key: "last_occurrence", header: "Last occurrence" },
       ]);
-      return csvResponse(csv, timestampedFilename(`anomalies-${days}d`));
+      return csvResponse(csv, timestampedFilename(`anomalies-${rangeSlug}`));
     }
 
     if (type === "report-audit") {
@@ -251,7 +271,7 @@ export async function GET(
         { key: "target_id", header: "Target ID" },
         { key: "meta", header: "Meta" },
       ]);
-      return csvResponse(csv, timestampedFilename(`audit-${days}d`));
+      return csvResponse(csv, timestampedFilename(`audit-${rangeSlug}`));
     }
   }
 
