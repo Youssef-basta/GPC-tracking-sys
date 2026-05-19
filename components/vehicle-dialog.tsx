@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Pencil, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { Vehicle } from "@/lib/types";
 
 const schema = z.object({
   plate: z.string().trim().min(1, "Plate is required").max(40),
@@ -37,14 +38,15 @@ const schema = z.object({
   last_lat: z.string().optional(),
   last_lng: z.string().optional(),
 });
-
 type Values = z.infer<typeof schema>;
 
-export function AddVehicleDialog({
-  triggerLabel = "Add vehicle",
-}: {
-  triggerLabel?: string;
-}) {
+type Props =
+  | { mode?: "create"; vehicle?: undefined; redirectAfter?: boolean; triggerLabel?: string }
+  | { mode: "edit"; vehicle: Vehicle; redirectAfter?: boolean; triggerLabel?: string };
+
+export function VehicleDialog(props: Props) {
+  const isEdit = props.mode === "edit";
+  const v = isEdit ? props.vehicle : undefined;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -57,62 +59,95 @@ export function AddVehicleDialog({
     formState: { errors },
   } = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { status: "offline" },
+    defaultValues: {
+      plate: v?.plate ?? "",
+      label: v?.label ?? "",
+      model: v?.model ?? "",
+      description: v?.description ?? "",
+      status: v?.status ?? "offline",
+      last_lat: v?.last_lat?.toString() ?? "",
+      last_lng: v?.last_lng?.toString() ?? "",
+    },
   });
+
+  // When the dialog opens for edit, re-sync from the latest props
+  useEffect(() => {
+    if (open && v) {
+      reset({
+        plate: v.plate,
+        label: v.label,
+        model: v.model ?? "",
+        description: v.description ?? "",
+        status: v.status,
+        last_lat: v.last_lat?.toString() ?? "",
+        last_lng: v.last_lng?.toString() ?? "",
+      });
+    }
+  }, [open, v, reset]);
 
   async function onSubmit(values: Values) {
     setSubmitting(true);
     const payload = {
       plate: values.plate,
       label: values.label,
-      model: values.model || undefined,
-      description: values.description || undefined,
+      model: values.model || (isEdit ? null : undefined),
+      description: values.description || (isEdit ? null : undefined),
       status: values.status,
       last_lat: values.last_lat ? Number(values.last_lat) : null,
       last_lng: values.last_lng ? Number(values.last_lng) : null,
     };
-    const res = await fetch("/api/admin/vehicles", {
-      method: "POST",
+    const url = isEdit ? `/api/admin/vehicles/${v!.id}` : "/api/admin/vehicles";
+    const res = await fetch(url, {
+      method: isEdit ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     setSubmitting(false);
     if (!res.ok) {
       const msg = await res.text();
-      toast.error(msg || "Failed to add vehicle");
+      toast.error(msg || "Failed to save vehicle");
       return;
     }
     const json = (await res.json()) as {
       vehicle: { id: string; plate: string; label: string };
     };
-    toast.success(
-      `${json.vehicle.label} (${json.vehicle.plate}) added. Opening detail …`,
-    );
+    if (isEdit) {
+      toast.success(`Updated ${json.vehicle.label}`);
+    } else {
+      toast.success(`${json.vehicle.label} (${json.vehicle.plate}) added`);
+    }
     setOpen(false);
-    reset({ status: "offline" });
-    router.push(`/vehicles/${json.vehicle.id}`);
+    if (!isEdit && props.redirectAfter !== false) {
+      router.push(`/vehicles/${json.vehicle.id}`);
+    }
     router.refresh();
   }
 
+  const Trigger = isEdit ? (
+    <Button variant="outline" size="sm">
+      <Pencil className="mr-1 size-3.5" />
+      {props.triggerLabel ?? "Edit"}
+    </Button>
+  ) : (
+    <Button
+      size="sm"
+      className="bg-gradient-to-r from-sky-500 via-fuchsia-500 to-emerald-500 text-white shadow-md shadow-fuchsia-500/30 hover:opacity-90"
+    >
+      <Plus className="mr-1 size-4" />
+      {props.triggerLabel ?? "Add vehicle"}
+    </Button>
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button
-            size="sm"
-            className="bg-gradient-to-r from-sky-500 via-fuchsia-500 to-emerald-500 text-white shadow-md shadow-fuchsia-500/30 hover:opacity-90"
-          />
-        }
-      >
-        <Plus className="mr-1 size-4" />
-        {triggerLabel}
-      </DialogTrigger>
+      <DialogTrigger render={Trigger} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add a vehicle</DialogTitle>
+          <DialogTitle>{isEdit ? `Edit ${v!.label}` : "Add a vehicle"}</DialogTitle>
           <DialogDescription>
-            A fresh ingest token will be generated automatically. Find it on the
-            vehicle&apos;s detail page after you save.
+            {isEdit
+              ? "Update the details below. The ingest token stays the same — rotate it separately on the detail page."
+              : "A fresh ingest token will be generated automatically. Find it on the vehicle’s detail page after you save."}
           </DialogDescription>
         </DialogHeader>
 
@@ -143,7 +178,9 @@ export function AddVehicleDialog({
             <Label htmlFor="status">Status</Label>
             <Select
               value={watch("status")}
-              onValueChange={(v) => v && setValue("status", v as Values["status"])}
+              onValueChange={(val) =>
+                val && setValue("status", val as Values["status"])
+              }
             >
               <SelectTrigger id="status">
                 <SelectValue />
@@ -159,7 +196,9 @@ export function AddVehicleDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="last_lat">Initial latitude</Label>
+              <Label htmlFor="last_lat">
+                {isEdit ? "Latitude" : "Initial latitude"}
+              </Label>
               <Input
                 id="last_lat"
                 type="number"
@@ -169,7 +208,9 @@ export function AddVehicleDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="last_lng">Initial longitude</Label>
+              <Label htmlFor="last_lng">
+                {isEdit ? "Longitude" : "Initial longitude"}
+              </Label>
               <Input
                 id="last_lng"
                 type="number"
@@ -202,14 +243,33 @@ export function AddVehicleDialog({
             <Button type="submit" disabled={submitting}>
               {submitting ? (
                 <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+              ) : isEdit ? (
+                <Pencil className="mr-1.5 size-3.5" />
               ) : (
                 <Plus className="mr-1.5 size-3.5" />
               )}
-              Add vehicle
+              {isEdit ? "Save changes" : "Add vehicle"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Back-compat thin wrappers so existing imports keep working
+export function AddVehicleDialog(props: { triggerLabel?: string } = {}) {
+  return <VehicleDialog mode="create" triggerLabel={props.triggerLabel} />;
+}
+
+export function EditVehicleDialog({
+  vehicle,
+  triggerLabel,
+}: {
+  vehicle: Vehicle;
+  triggerLabel?: string;
+}) {
+  return (
+    <VehicleDialog mode="edit" vehicle={vehicle} triggerLabel={triggerLabel} />
   );
 }

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageTitle } from "@/components/page-title";
-import { AddVehicleDialog } from "@/components/add-vehicle-dialog";
+import { AddVehicleDialog, EditVehicleDialog } from "@/components/vehicle-dialog";
 import {
   Table,
   TableBody,
@@ -107,7 +107,10 @@ export default async function AdminContentPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <VehicleActions vehicle={v} />
+                        <div className="flex justify-end gap-2">
+                          {!v.deleted_at && <EditVehicleDialog vehicle={v} />}
+                          <VehicleActions vehicle={v} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

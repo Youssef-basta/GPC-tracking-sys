@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageTitle } from "@/components/page-title";
-import { AddVehicleDialog } from "@/components/add-vehicle-dialog";
+import { AddVehicleDialog, EditVehicleDialog } from "@/components/vehicle-dialog";
 import {
   Table,
   TableBody,
@@ -75,12 +75,16 @@ export default async function VehiclesPage({
               <TableHead>Model</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Last seen</TableHead>
+              {profile.role === "admin" && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {vehicles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={profile.role === "admin" ? 6 : 5}
+                  className="py-8 text-center text-muted-foreground"
+                >
                   No vehicles yet. Run the seed migration to add demo data.
                 </TableCell>
               </TableRow>
@@ -106,6 +110,11 @@ export default async function VehiclesPage({
                       ? new Date(v.last_seen_at).toLocaleString()
                       : "—"}
                   </TableCell>
+                  {profile.role === "admin" && (
+                    <TableCell className="text-right">
+                      <EditVehicleDialog vehicle={v} />
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

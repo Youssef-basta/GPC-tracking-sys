@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { SummarySection } from "@/components/summary-section";
 import { IngestCredentials } from "@/components/ingest-credentials";
+import { EditVehicleDialog } from "@/components/vehicle-dialog";
 import type { Vehicle, VehicleLocation } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +90,10 @@ export default async function VehicleDetailPage({
             {vehicle.model && <> · {vehicle.model}</>}
           </p>
         </div>
-        <Badge className="capitalize">{vehicle.status}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge className="capitalize">{vehicle.status}</Badge>
+          {profile.role === "admin" && <EditVehicleDialog vehicle={vehicle} />}
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
