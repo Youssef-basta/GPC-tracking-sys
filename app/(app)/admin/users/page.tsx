@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { UsersTable } from "./users-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageTitle } from "@/components/page-title";
 import {
   Select,
   SelectContent,
@@ -34,7 +35,7 @@ export default async function AdminUsersPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Users</h1>
+        <PageTitle>Users</PageTitle>
         <p className="text-sm text-muted-foreground">
           {users.length} account{users.length === 1 ? "" : "s"}
         </p>

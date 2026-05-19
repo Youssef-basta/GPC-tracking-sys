@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageTitle } from "@/components/page-title";
 import {
   Table,
   TableBody,
@@ -43,7 +44,7 @@ export default async function AdminContentPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Content moderation</h1>
+          <PageTitle>Content moderation</PageTitle>
           <p className="text-sm text-muted-foreground">
             {openReports} open report{openReports === 1 ? "" : "s"} · {vehicles.length} vehicles total
           </p>

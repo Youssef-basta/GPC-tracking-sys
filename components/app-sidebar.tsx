@@ -68,13 +68,19 @@ function NavGroup({
               <Link
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+                  "relative flex items-center gap-2 rounded-md px-2 py-1.5 transition-all",
                   active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    ? "bg-gradient-to-r from-sky-500/15 via-fuchsia-500/10 to-emerald-500/15 text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_rgba(99,102,241,0.15)]"
                     : "text-sidebar-foreground hover:bg-sidebar-accent/60",
                 )}
               >
-                <Icon className="size-4" />
+                {active && (
+                  <span
+                    aria-hidden
+                    className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-gradient-to-b from-sky-500 via-fuchsia-500 to-emerald-500"
+                  />
+                )}
+                <Icon className={cn("size-4", active && "text-sky-600 dark:text-sky-400")} />
                 {item.label}
               </Link>
             </li>

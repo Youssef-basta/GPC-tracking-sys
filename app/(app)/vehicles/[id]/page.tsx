@@ -81,7 +81,9 @@ export default async function VehicleDetailPage({
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">{vehicle.label}</h1>
+          <h1 className="bg-gradient-to-r from-sky-600 via-fuchsia-600 to-emerald-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent dark:from-sky-400 dark:via-fuchsia-400 dark:to-emerald-400">
+            {vehicle.label}
+          </h1>
           <p className="font-mono text-sm text-muted-foreground">
             {vehicle.plate}
             {vehicle.model && <> · {vehicle.model}</>}

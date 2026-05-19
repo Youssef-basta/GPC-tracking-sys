@@ -3,6 +3,7 @@ import { requireProfile } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PageTitle } from "@/components/page-title";
 import {
   Table,
   TableBody,
@@ -47,7 +48,7 @@ export default async function VehiclesPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Vehicles</h1>
+          <PageTitle>Vehicles</PageTitle>
           <p className="text-sm text-muted-foreground">
             {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"}
           </p>

@@ -1,5 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { NotificationsList } from "./notifications-list";
+import { PageTitle } from "@/components/page-title";
 import type { Notification } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export default async function NotificationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Notifications</h1>
+        <PageTitle>Notifications</PageTitle>
         <p className="text-sm text-muted-foreground">
           Live alerts for anomalies, reports, and admin actions affecting you.
         </p>
