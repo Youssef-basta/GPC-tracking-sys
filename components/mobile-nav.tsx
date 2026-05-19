@@ -24,6 +24,7 @@ const adminNav = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/content", label: "Content" },
   { href: "/admin/analytics", label: "Analytics" },
+  { href: "/admin/reports", label: "Reports" },
 ];
 
 export function MobileNav({ role }: { role: UserRole }) {
