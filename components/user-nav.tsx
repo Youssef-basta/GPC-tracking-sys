@@ -4,13 +4,10 @@ import { LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import type { Profile } from "@/lib/types";
 
@@ -26,17 +23,16 @@ export function UserNav({ profile }: { profile: Profile }) {
     try {
       await fetch("/api/auth/signout", { method: "POST" });
     } catch {
-      // ignore — we still want to navigate even if the request fails
+      // ignore — we still navigate even if the request fails
     }
-    // Hard navigation: clears all client-side state (React tree, supabase
-    // realtime channels, in-flight RSC fetches) so we don't race the
-    // session removal against any background subscriptions.
+    // Hard navigation: avoids the RSC refresh race with the
+    // already-removed session cookie on routes with realtime subscriptions.
     window.location.href = "/login";
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <Popover>
+      <PopoverTrigger
         render={
           <Button
             variant="ghost"
@@ -47,13 +43,13 @@ export function UserNav({ profile }: { profile: Profile }) {
         <Avatar className="size-9">
           <AvatarFallback>{initials}</AvatarFallback>
         </Avatar>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="space-y-1">
-          <div className="truncate text-sm">
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-1.5">
+        <div className="space-y-0.5 px-2 py-1.5">
+          <div className="truncate text-sm font-medium">
             {profile.full_name || profile.email}
           </div>
-          <div className="truncate text-xs font-normal text-muted-foreground">
+          <div className="truncate text-xs text-muted-foreground">
             {profile.email}
           </div>
           {profile.role === "admin" && (
@@ -61,13 +57,17 @@ export function UserNav({ profile }: { profile: Profile }) {
               Admin
             </Badge>
           )}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut}>
-          <LogOut className="mr-2 size-4" />
+        </div>
+        <div className="my-1 border-t" />
+        <button
+          type="button"
+          onClick={signOut}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent"
+        >
+          <LogOut className="size-4" />
           Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }
