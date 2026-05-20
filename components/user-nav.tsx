@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,6 @@ import { Badge } from "@/components/ui/badge";
 import type { Profile } from "@/lib/types";
 
 export function UserNav({ profile }: { profile: Profile }) {
-  const router = useRouter();
   const initials = (profile.full_name || profile.email)
     .split(" ")
     .map((p) => p[0])
@@ -25,9 +23,15 @@ export function UserNav({ profile }: { profile: Profile }) {
     .toUpperCase();
 
   async function signOut() {
-    await fetch("/api/auth/signout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    try {
+      await fetch("/api/auth/signout", { method: "POST" });
+    } catch {
+      // ignore — we still want to navigate even if the request fails
+    }
+    // Hard navigation: clears all client-side state (React tree, supabase
+    // realtime channels, in-flight RSC fetches) so we don't race the
+    // session removal against any background subscriptions.
+    window.location.href = "/login";
   }
 
   return (
