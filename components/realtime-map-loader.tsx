@@ -16,11 +16,13 @@ export function RealtimeMapLoader({
   initialVehicles,
   initialZones,
   initialPois,
+  trailPoints,
   height,
 }: {
   initialVehicles: Vehicle[];
   initialZones?: Zone[];
   initialPois?: Poi[];
+  trailPoints?: number;
   height?: number;
 }) {
   return (
@@ -28,6 +30,7 @@ export function RealtimeMapLoader({
       initialVehicles={initialVehicles}
       initialZones={initialZones}
       initialPois={initialPois}
+      trailPoints={trailPoints}
       height={height}
     />
   );

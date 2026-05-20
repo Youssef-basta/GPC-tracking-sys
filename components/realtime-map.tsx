@@ -24,6 +24,7 @@ import {
   Eye,
   EyeOff,
   Layers,
+  Route,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { haversineMeters } from "@/lib/geofencing";
@@ -162,11 +163,13 @@ export function RealtimeMap({
   initialVehicles,
   initialZones = [],
   initialPois = [],
+  trailPoints = 30,
   height = 520,
 }: {
   initialVehicles: Vehicle[];
   initialZones?: Zone[];
   initialPois?: Poi[];
+  trailPoints?: number;
   height?: number;
 }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
@@ -178,8 +181,108 @@ export function RealtimeMap({
     vehicles: true,
     zones: true,
     pois: true,
+    trails: true,
   });
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
+
+  // Trail state: which vehicle IDs have trails on, and their fetched points
+  const [trailedIds, setTrailedIds] = useState<Set<string>>(new Set());
+  const [trailPaths, setTrailPaths] = useState<
+    Record<string, [number, number][]>
+  >({});
+
+  // Persist trail toggles to localStorage so they survive refresh
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("gpc:trails");
+      if (raw) setTrailedIds(new Set(JSON.parse(raw)));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("gpc:trails", JSON.stringify([...trailedIds]));
+    } catch {}
+  }, [trailedIds]);
+
+  // Fetch trails whenever the trailed set changes — pull last N locations per vehicle
+  useEffect(() => {
+    if (trailedIds.size === 0) {
+      setTrailPaths({});
+      return;
+    }
+    const supabase = createClient();
+    let cancelled = false;
+    (async () => {
+      const ids = [...trailedIds];
+      const results: Record<string, [number, number][]> = {};
+      // One query per vehicle to leverage the (vehicle_id, created_at desc) index
+      await Promise.all(
+        ids.map(async (id) => {
+          const { data } = await supabase
+            .from("locations")
+            .select("lat, lng, created_at")
+            .eq("vehicle_id", id)
+            .order("created_at", { ascending: false })
+            .limit(trailPoints);
+          if (data && data.length > 0) {
+            // reverse so polyline is drawn oldest → newest
+            results[id] = data
+              .slice()
+              .reverse()
+              .map((r) => [r.lat as number, r.lng as number]);
+          }
+        }),
+      );
+      if (!cancelled) setTrailPaths(results);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trailedIds, trailPoints]);
+
+  // Realtime: extend the trail when a new ping arrives for a trailed vehicle
+  useEffect(() => {
+    if (trailedIds.size === 0) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel("locations-trails")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "locations" },
+        (payload) => {
+          const row = payload.new as {
+            vehicle_id: string;
+            lat: number;
+            lng: number;
+          };
+          if (!trailedIds.has(row.vehicle_id)) return;
+          setTrailPaths((prev) => {
+            const existing = prev[row.vehicle_id] || [];
+            const next = [...existing, [row.lat, row.lng] as [number, number]];
+            // cap to trailPoints
+            const trimmed =
+              next.length > trailPoints ? next.slice(-trailPoints) : next;
+            return { ...prev, [row.vehicle_id]: trimmed };
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [trailedIds, trailPoints]);
+
+  function toggleTrail(vehicleId: string) {
+    setTrailedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(vehicleId)) next.delete(vehicleId);
+      else next.add(vehicleId);
+      return next;
+    });
+  }
+  function clearAllTrails() {
+    setTrailedIds(new Set());
+  }
 
   // Map tools
   const [tool, setTool] = useState<MapTool>("none");
@@ -369,6 +472,21 @@ export function RealtimeMap({
         >
           <Crosshair className="size-4 text-slate-700" />
         </button>
+        {trailedIds.size > 0 && (
+          <button
+            type="button"
+            onClick={clearAllTrails}
+            className="grid size-9 place-items-center rounded-md border bg-white shadow-md hover:bg-slate-50"
+            title={`Clear ${trailedIds.size} active trail${trailedIds.size === 1 ? "" : "s"}`}
+          >
+            <span className="relative">
+              <Route className="size-4 text-emerald-600" />
+              <span className="absolute -right-1.5 -top-1.5 grid size-3.5 place-items-center rounded-full bg-emerald-500 text-[9px] font-bold text-white">
+                {trailedIds.size > 9 ? "9+" : trailedIds.size}
+              </span>
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Layer panel */}
@@ -391,6 +509,11 @@ export function RealtimeMap({
             label="Places (POIs)"
             checked={layers.pois}
             onChange={(v) => setLayers({ ...layers, pois: v })}
+          />
+          <LayerToggle
+            label="Trails"
+            checked={layers.trails}
+            onChange={(v) => setLayers({ ...layers, trails: v })}
           />
         </div>
       )}
@@ -627,16 +750,45 @@ export function RealtimeMap({
                           })}
                         </div>
                       )}
-                      <a
-                        className="text-xs text-blue-600 hover:underline"
-                        href={`/vehicles/${v.id}`}
-                      >
-                        Open vehicle
-                      </a>
+                      <div className="mt-1 flex items-center gap-2 text-xs">
+                        <a
+                          className="text-blue-600 hover:underline"
+                          href={`/vehicles/${v.id}`}
+                        >
+                          Open vehicle
+                        </a>
+                        <span className="text-slate-300">·</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleTrail(v.id)}
+                          className="text-emerald-700 hover:underline"
+                        >
+                          {trailedIds.has(v.id) ? "Hide trail" : "Show trail"}
+                        </button>
+                      </div>
                     </div>
                   </Popup>
                 </Marker>
               ))}
+
+          {/* Vehicle trails */}
+          {layers.trails &&
+            Object.entries(trailPaths).map(([vehicleId, path]) => {
+              if (path.length < 2) return null;
+              const v = vehicles.find((x) => x.id === vehicleId);
+              const color = statusColor[v?.status ?? "offline"] || "#6b7280";
+              return (
+                <Polyline
+                  key={`trail-${vehicleId}`}
+                  positions={path}
+                  pathOptions={{
+                    color,
+                    weight: 3,
+                    opacity: 0.7,
+                  }}
+                />
+              );
+            })}
 
           {/* Measurement preview */}
           {tool === "distance" && measurePoints.length >= 2 && (

@@ -11,16 +11,22 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const { profile, supabase } = await requireProfile();
 
-  const [{ data: vehicles }, { data: zones }, { data: pois }] =
+  const [{ data: vehicles }, { data: zones }, { data: pois }, { data: settings }] =
     await Promise.all([
       supabase.from("vehicles").select("*").is("deleted_at", null).order("label"),
       supabase.from("zones").select("*").is("deleted_at", null).order("name"),
       supabase.from("pois").select("*").is("deleted_at", null).order("name"),
+      supabase
+        .from("user_settings")
+        .select("trail_points")
+        .eq("user_id", profile.id)
+        .maybeSingle(),
     ]);
 
   const list = (vehicles ?? []) as Vehicle[];
   const zoneList = (zones ?? []) as Zone[];
   const poiList = (pois ?? []) as Poi[];
+  const trailPoints = (settings?.trail_points as number | undefined) ?? 30;
 
   return (
     <div className="space-y-6">
@@ -43,6 +49,7 @@ export default async function DashboardPage() {
         initialVehicles={list}
         initialZones={zoneList}
         initialPois={poiList}
+        trailPoints={trailPoints}
       />
     </div>
   );

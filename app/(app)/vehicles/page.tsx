@@ -1,28 +1,11 @@
-import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageTitle } from "@/components/page-title";
-import { AddVehicleDialog, EditVehicleDialog } from "@/components/vehicle-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { AddVehicleDialog } from "@/components/vehicle-dialog";
+import { VehiclesTable } from "./vehicles-table";
 import type { Vehicle } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  active: "default",
-  idle: "secondary",
-  offline: "outline",
-  maintenance: "secondary",
-};
 
 export default async function VehiclesPage({
   searchParams,
@@ -44,6 +27,7 @@ export default async function VehiclesPage({
   }
   const { data } = await query;
   const vehicles = (data ?? []) as Vehicle[];
+  const isAdmin = profile.role === "admin";
 
   return (
     <div className="space-y-6">
@@ -52,9 +36,10 @@ export default async function VehiclesPage({
           <PageTitle>Vehicles</PageTitle>
           <p className="text-sm text-muted-foreground">
             {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"}
+            {isAdmin && " · select rows for bulk actions"}
           </p>
         </div>
-        {profile.role === "admin" && <AddVehicleDialog />}
+        {isAdmin && <AddVehicleDialog />}
       </div>
 
       <form className="flex gap-2">
@@ -66,65 +51,7 @@ export default async function VehiclesPage({
         />
       </form>
 
-      <Card className="overflow-hidden p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Plate</TableHead>
-              <TableHead>Label</TableHead>
-              <TableHead>Driver</TableHead>
-              <TableHead>Model</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Last seen</TableHead>
-              {profile.role === "admin" && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {vehicles.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={profile.role === "admin" ? 7 : 6}
-                  className="py-8 text-center text-muted-foreground"
-                >
-                  No vehicles yet. Run the seed migration to add demo data.
-                </TableCell>
-              </TableRow>
-            ) : (
-              vehicles.map((v) => (
-                <TableRow key={v.id}>
-                  <TableCell className="font-mono text-xs">
-                    <Link href={`/vehicles/${v.id}`} className="hover:underline">
-                      {v.plate}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{v.label}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {v.driver_name || "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {v.model || "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant[v.status] || "outline"} className="capitalize">
-                      {v.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {v.last_seen_at
-                      ? new Date(v.last_seen_at).toLocaleString()
-                      : "—"}
-                  </TableCell>
-                  {profile.role === "admin" && (
-                    <TableCell className="text-right">
-                      <EditVehicleDialog vehicle={v} />
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      <VehiclesTable vehicles={vehicles} canBulkEdit={isAdmin} />
     </div>
   );
 }
