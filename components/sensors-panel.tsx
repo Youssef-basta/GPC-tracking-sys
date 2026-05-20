@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
 import { Fuel, Thermometer, Zap, Gauge, Activity } from "lucide-react";
+import { SensorSparkline } from "@/components/sensor-sparkline";
 import type { Vehicle } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,13 @@ function voltageTone(v: number | null) {
   if (v < 12.2) return "text-amber-600 dark:text-amber-400";
   return "text-emerald-600 dark:text-emerald-400";
 }
+
+const COLORS = {
+  fuel: "#10b981",
+  temp: "#f59e0b",
+  voltage: "#0ea5e9",
+  rpm: "#a855f7",
+};
 
 export function SensorsPanel({ vehicle }: { vehicle: Vehicle }) {
   const allNull =
@@ -59,6 +67,15 @@ export function SensorsPanel({ vehicle }: { vehicle: Vehicle }) {
                 : "—"
             }
             tone={fuelTone(vehicle.last_fuel_percent)}
+            sparkline={
+              vehicle.last_fuel_percent != null ? (
+                <SensorSparkline
+                  vehicleId={vehicle.id}
+                  sensor="fuel_percent"
+                  color={COLORS.fuel}
+                />
+              ) : null
+            }
           />
           <Metric
             icon={<Thermometer className="size-4" />}
@@ -69,6 +86,15 @@ export function SensorsPanel({ vehicle }: { vehicle: Vehicle }) {
                 : "—"
             }
             tone={tempTone(vehicle.last_temp_celsius)}
+            sparkline={
+              vehicle.last_temp_celsius != null ? (
+                <SensorSparkline
+                  vehicleId={vehicle.id}
+                  sensor="temp_celsius"
+                  color={COLORS.temp}
+                />
+              ) : null
+            }
           />
           <Metric
             icon={<Zap className="size-4" />}
@@ -79,6 +105,15 @@ export function SensorsPanel({ vehicle }: { vehicle: Vehicle }) {
                 : "—"
             }
             tone={voltageTone(vehicle.last_voltage_v)}
+            sparkline={
+              vehicle.last_voltage_v != null ? (
+                <SensorSparkline
+                  vehicleId={vehicle.id}
+                  sensor="voltage_v"
+                  color={COLORS.voltage}
+                />
+              ) : null
+            }
           />
           <Metric
             icon={<Gauge className="size-4" />}
@@ -89,6 +124,15 @@ export function SensorsPanel({ vehicle }: { vehicle: Vehicle }) {
                 : "—"
             }
             tone="text-foreground"
+            sparkline={
+              vehicle.last_engine_rpm != null ? (
+                <SensorSparkline
+                  vehicleId={vehicle.id}
+                  sensor="engine_rpm"
+                  color={COLORS.rpm}
+                />
+              ) : null
+            }
           />
           <Metric
             icon={<Gauge className="size-4" />}
@@ -111,11 +155,13 @@ function Metric({
   label,
   value,
   tone,
+  sparkline,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   tone: string;
+  sparkline?: React.ReactNode;
 }) {
   return (
     <div className="rounded-md border bg-muted/20 p-3">
@@ -126,6 +172,7 @@ function Metric({
       <div className={cn("text-xl font-semibold tabular-nums", tone)}>
         {value}
       </div>
+      {sparkline && <div className="mt-1">{sparkline}</div>}
     </div>
   );
 }

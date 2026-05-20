@@ -51,6 +51,7 @@ type Exportable =
   | "report-speed"
   | "report-idle"
   | "report-anomalies"
+  | "report-sensors"
   | "report-audit";
 const ALLOWED: Exportable[] = [
   "users",
@@ -62,6 +63,7 @@ const ALLOWED: Exportable[] = [
   "report-speed",
   "report-idle",
   "report-anomalies",
+  "report-sensors",
   "report-audit",
 ];
 
@@ -301,6 +303,39 @@ export async function GET(
         {
           title: "Idle events",
           subtitle: `Pings idle ≥ ${minIdle}s`,
+          meta: rangeMeta,
+        },
+      );
+    }
+
+    if (type === "report-sensors") {
+      const { data, error } = await supabase.rpc("report_vehicle_sensors", range);
+      if (error) return new NextResponse(error.message, { status: 500 });
+      return renderTabular(
+        format,
+        (data || []) as Record<string, unknown>[],
+        [
+          { key: "plate", header: "Plate" },
+          { key: "label", header: "Label" },
+          { key: "driver_name", header: "Driver" },
+          { key: "reading_count", header: "Readings", align: "right" },
+          { key: "fuel_avg", header: "Fuel avg %", align: "right" },
+          { key: "fuel_min", header: "Fuel min %", align: "right" },
+          { key: "fuel_max", header: "Fuel max %", align: "right" },
+          { key: "temp_avg", header: "Temp avg °C", align: "right" },
+          { key: "temp_max", header: "Temp max °C", align: "right" },
+          { key: "voltage_avg", header: "Voltage avg V", align: "right" },
+          { key: "voltage_min", header: "Voltage min V", align: "right" },
+          { key: "rpm_avg", header: "RPM avg", align: "right" },
+          { key: "odometer_start", header: "Odo start (km)", align: "right" },
+          { key: "odometer_end", header: "Odo end (km)", align: "right" },
+          { key: "distance_km", header: "Distance (km)", align: "right" },
+          { key: "last_reading_at", header: "Last reading" },
+        ],
+        `sensors-${rangeSlug}`,
+        {
+          title: "Sensor summary",
+          subtitle: "Per-vehicle fuel / temp / voltage / RPM aggregates",
           meta: rangeMeta,
         },
       );

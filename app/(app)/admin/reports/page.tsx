@@ -19,8 +19,21 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-type ReportType = "activity" | "speed" | "idle" | "anomalies" | "audit";
-const VALID: ReportType[] = ["activity", "speed", "idle", "anomalies", "audit"];
+type ReportType =
+  | "activity"
+  | "speed"
+  | "idle"
+  | "anomalies"
+  | "sensors"
+  | "audit";
+const VALID: ReportType[] = [
+  "activity",
+  "speed",
+  "idle",
+  "anomalies",
+  "sensors",
+  "audit",
+];
 
 const REPORTS: { id: ReportType; label: string; desc: string }[] = [
   {
@@ -42,6 +55,11 @@ const REPORTS: { id: ReportType; label: string; desc: string }[] = [
     id: "anomalies",
     label: "Anomalies",
     desc: "Long-idle and route-jump events, grouped by vehicle.",
+  },
+  {
+    id: "sensors",
+    label: "Sensors",
+    desc: "Per-vehicle fuel / temp / voltage / RPM averages + distance from odometer.",
   },
   {
     id: "audit",
@@ -389,6 +407,9 @@ export default async function ReportsPage({
           {type === "anomalies" && (
             <AnomaliesReport supabase={supabase} from={from} to={to} />
           )}
+          {type === "sensors" && (
+            <SensorsReport supabase={supabase} from={from} to={to} />
+          )}
           {type === "audit" && (
             <AuditReport supabase={supabase} from={from} to={to} />
           )}
@@ -733,6 +754,148 @@ async function AnomaliesReport({
               {formatDistanceToNow(new Date(r.last_occurrence), {
                 addSuffix: true,
               })}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+interface SensorRow {
+  vehicle_id: string;
+  plate: string;
+  label: string;
+  driver_name: string | null;
+  reading_count: number;
+  fuel_avg: number | null;
+  fuel_min: number | null;
+  fuel_max: number | null;
+  temp_avg: number | null;
+  temp_max: number | null;
+  voltage_avg: number | null;
+  voltage_min: number | null;
+  rpm_avg: number | null;
+  odometer_start: number | null;
+  odometer_end: number | null;
+  distance_km: number | null;
+  last_reading_at: string | null;
+}
+
+async function SensorsReport({
+  supabase,
+  from,
+  to,
+}: {
+  supabase: SupabaseClient;
+  from: Date;
+  to: Date;
+}) {
+  const { data, error } = await supabase.rpc("report_vehicle_sensors", {
+    date_from: from.toISOString(),
+    date_to: to.toISOString(),
+  });
+  if (error) return <ErrorState message={error.message} />;
+  const rows = (data ?? []) as SensorRow[];
+  if (rows.length === 0)
+    return <EmptyState label="No sensor data in this window." />;
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Vehicle</TableHead>
+          <TableHead>Driver</TableHead>
+          <TableHead className="text-right">Readings</TableHead>
+          <TableHead className="text-right">Fuel avg</TableHead>
+          <TableHead className="text-right">Fuel min</TableHead>
+          <TableHead className="text-right">Temp avg</TableHead>
+          <TableHead className="text-right">Temp max</TableHead>
+          <TableHead className="text-right">Volt avg</TableHead>
+          <TableHead className="text-right">Volt min</TableHead>
+          <TableHead className="text-right">RPM avg</TableHead>
+          <TableHead className="text-right">Distance</TableHead>
+          <TableHead>Last reading</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => (
+          <TableRow key={r.vehicle_id}>
+            <TableCell>
+              <Link
+                href={`/vehicles/${r.vehicle_id}`}
+                className="font-medium hover:underline"
+              >
+                {r.label}
+              </Link>
+              <div className="font-mono text-xs text-muted-foreground">
+                {r.plate}
+              </div>
+            </TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {r.driver_name || "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.reading_count}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.fuel_avg != null ? `${Number(r.fuel_avg).toFixed(0)}%` : "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.fuel_min != null ? `${Number(r.fuel_min).toFixed(0)}%` : "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.temp_avg != null ? `${Number(r.temp_avg).toFixed(0)}°C` : "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.temp_max != null ? (
+                <span
+                  className={
+                    Number(r.temp_max) > 105
+                      ? "text-red-600 dark:text-red-400"
+                      : ""
+                  }
+                >
+                  {Number(r.temp_max).toFixed(0)}°C
+                </span>
+              ) : (
+                "—"
+              )}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.voltage_avg != null
+                ? `${Number(r.voltage_avg).toFixed(1)} V`
+                : "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.voltage_min != null ? (
+                <span
+                  className={
+                    Number(r.voltage_min) < 11.8
+                      ? "text-red-600 dark:text-red-400"
+                      : ""
+                  }
+                >
+                  {Number(r.voltage_min).toFixed(1)} V
+                </span>
+              ) : (
+                "—"
+              )}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.rpm_avg != null ? Number(r.rpm_avg).toFixed(0) : "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.distance_km != null
+                ? `${Number(r.distance_km).toFixed(1)} km`
+                : "—"}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {r.last_reading_at
+                ? formatDistanceToNow(new Date(r.last_reading_at), {
+                    addSuffix: true,
+                  })
+                : "—"}
             </TableCell>
           </TableRow>
         ))}
