@@ -66,7 +66,9 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const { data: vehicle, error: vErr } = await admin
     .from("vehicles")
-    .select("id, last_lat, last_lng, last_seen_at, deleted_at")
+    .select(
+      "id, last_lat, last_lng, last_seen_at, deleted_at, last_fuel_percent, last_sensor_at",
+    )
     .eq("ingest_token", token)
     .single();
   if (vErr || !vehicle) {
@@ -158,8 +160,29 @@ export async function POST(request: NextRequest) {
     created_at: string;
   }>;
 
+  let fuelTheftDetected: { drop: number } | null = null;
   if (sensorInserts.length > 0) {
     await admin.from("sensor_readings").insert(sensorInserts);
+    // Fuel-theft check on the freshest reading in this batch
+    const FUEL_THEFT_DROP_PCT = 15;
+    const FUEL_THEFT_WINDOW_MIN = 10;
+    const newest = sensorInserts[sensorInserts.length - 1];
+    if (
+      newest.fuel_percent != null &&
+      vehicle.last_fuel_percent != null &&
+      vehicle.last_sensor_at
+    ) {
+      const prevTs = new Date(vehicle.last_sensor_at).getTime();
+      const minutesSince = (Date.now() - prevTs) / 60_000;
+      const drop = vehicle.last_fuel_percent - newest.fuel_percent;
+      if (
+        drop >= FUEL_THEFT_DROP_PCT &&
+        minutesSince > 0 &&
+        minutesSince <= FUEL_THEFT_WINDOW_MIN
+      ) {
+        fuelTheftDetected = { drop };
+      }
+    }
   }
 
   // Geofence crossings — compare the first and last ping of this batch
@@ -232,7 +255,7 @@ export async function POST(request: NextRequest) {
   }
 
   const anomalies = inserts.filter((r) => r.anomaly);
-  if (anomalies.length > 0 || zoneNotices.length > 0) {
+  if (anomalies.length > 0 || zoneNotices.length > 0 || fuelTheftDetected) {
     const { data: admins } = await admin
       .from("profiles")
       .select("id")
@@ -255,6 +278,13 @@ export async function POST(request: NextRequest) {
           user_id: a,
           message: `${prefix}: vehicle ${vehicle.id.slice(0, 8)}… ${z.kind === "enter" ? "entered" : "exited"} "${z.zone_name}"`,
           link: `/vehicles/${vehicle.id}`,
+        });
+      }
+      if (fuelTheftDetected) {
+        notes.push({
+          user_id: a,
+          message: `⚠ Possible fuel theft: vehicle ${vehicle.id.slice(0, 8)}… lost ${fuelTheftDetected.drop.toFixed(1)}% fuel in <10 min`,
+          link: `/vehicles/${vehicle.id}/sensors`,
         });
       }
     }

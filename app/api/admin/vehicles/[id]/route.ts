@@ -13,6 +13,7 @@ const patchSchema = z.object({
   status: z.enum(["active", "idle", "offline", "maintenance"]).optional(),
   last_lat: z.number().gte(-90).lte(90).nullable().optional(),
   last_lng: z.number().gte(-180).lte(180).nullable().optional(),
+  fuel_tank_litres: z.number().gt(0).lte(2000).nullable().optional(),
 });
 
 async function requireAdminUser() {

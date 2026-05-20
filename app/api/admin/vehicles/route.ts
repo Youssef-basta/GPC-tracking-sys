@@ -13,6 +13,7 @@ const schema = z.object({
   status: z.enum(["active", "idle", "offline", "maintenance"]).default("offline"),
   last_lat: z.number().gte(-90).lte(90).optional().nullable(),
   last_lng: z.number().gte(-180).lte(180).optional().nullable(),
+  fuel_tank_litres: z.number().gt(0).lte(2000).optional().nullable(),
 });
 
 export async function POST(request: NextRequest) {
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       status: parsed.data.status,
       last_lat: parsed.data.last_lat ?? null,
       last_lng: parsed.data.last_lng ?? null,
+      fuel_tank_litres: parsed.data.fuel_tank_litres ?? null,
     })
     .select("id, plate, label, ingest_token")
     .single();

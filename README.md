@@ -163,6 +163,104 @@ middleware.ts             session refresh + role gating
 
 ---
 
+## Wiring real GPS / OBD-II devices
+
+Any tracker that can POST JSON over HTTPS works. The endpoint is:
+
+```
+POST /api/ingest
+Authorization: Bearer <vehicle-ingest-token>
+Content-Type: application/json
+```
+
+Find the token on each **Vehicle → detail page** (admin only) → **GPS ingest credentials** card. Rotate it any time from the same card.
+
+### Single ping with sensors
+
+```json
+{
+  "lat": 24.7136,
+  "lng": 46.6753,
+  "speed_kmh": 45,
+  "heading": 90,
+  "sensors": {
+    "fuel_percent": 67,
+    "temp_celsius": 88,
+    "voltage_v": 13.6,
+    "engine_rpm": 2400,
+    "odometer_km": 142573.8,
+    "extras": { "door_open": false, "ignition": true }
+  }
+}
+```
+
+### Batch (up to 200 points, oldest first)
+
+```json
+{
+  "points": [
+    {"lat": 24.71, "lng": 46.67, "speed_kmh": 30,
+     "created_at": "2026-05-19T10:00:00Z",
+     "sensors": { "fuel_percent": 90 }},
+    {"lat": 24.72, "lng": 46.68, "speed_kmh": 40,
+     "created_at": "2026-05-19T10:00:10Z",
+     "sensors": { "fuel_percent": 89 }}
+  ]
+}
+```
+
+### Traccar setup (community-edition trackers)
+
+Traccar can forward positions via the **Forward** plugin to an external HTTP endpoint. In `traccar.xml` add:
+
+```xml
+<entry key='forward.enable'>true</entry>
+<entry key='forward.url'>https://gpc-tracking-sys.vercel.app/api/ingest</entry>
+<entry key='forward.header'>Authorization: Bearer YOUR_INGEST_TOKEN</entry>
+<entry key='forward.json'>true</entry>
+```
+
+Then write a small Lua/script transformer (Traccar supports `forward.template`) that converts Traccar's body into our schema, mapping:
+- `latitude` → `lat`
+- `longitude` → `lng`
+- `speed` → `speed_kmh` (Traccar uses knots — multiply by 1.852)
+- `attributes.batteryLevel` → `sensors.voltage_v` × 12 (if % battery)
+- `attributes.fuel` → `sensors.fuel_percent`
+- `attributes.engineHours` / `odometer` → `sensors.odometer_km`
+
+### OBD-II dongle setup (e.g. Bluetooth ELM327 + Raspberry Pi)
+
+A small Python script polls the OBD-II port and POSTs each reading:
+
+```python
+import obd, requests, time
+INGEST_URL = "https://gpc-tracking-sys.vercel.app/api/ingest"
+TOKEN = "your-ingest-token-here"
+conn = obd.OBD()
+
+while True:
+    rpm = conn.query(obd.commands.RPM).value
+    temp = conn.query(obd.commands.COOLANT_TEMP).value
+    fuel = conn.query(obd.commands.FUEL_LEVEL).value
+    voltage = conn.query(obd.commands.CONTROL_MODULE_VOLTAGE).value
+    speed = conn.query(obd.commands.SPEED).value
+    # ... get GPS from external module (USB GPS, phone, etc.)
+    body = {
+        "lat": gps_lat, "lng": gps_lng, "speed_kmh": float(speed.to("km/h").magnitude),
+        "sensors": {
+            "engine_rpm": int(rpm.magnitude),
+            "temp_celsius": float(temp.to("celsius").magnitude),
+            "fuel_percent": float(fuel.magnitude),
+            "voltage_v": float(voltage.magnitude),
+        },
+    }
+    requests.post(INGEST_URL, json=body,
+                  headers={"Authorization": f"Bearer {TOKEN}"})
+    time.sleep(30)
+```
+
+Once data starts flowing, the dashboard map, Sensors card, sparklines, and reports all populate automatically.
+
 ## What's intentionally deferred
 
 - **Payments (MyFatoorah / Tap)** — no payment user story in Phase 1. Add when a billing model is defined.

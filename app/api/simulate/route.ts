@@ -82,7 +82,9 @@ async function run(request: NextRequest) {
   const admin = createAdminClient();
   const { data: vehicles, error } = await admin
     .from("vehicles")
-    .select("id, last_lat, last_lng, last_seen_at, status")
+    .select(
+      "id, last_lat, last_lng, last_seen_at, status, last_fuel_percent, last_temp_celsius, last_voltage_v, last_engine_rpm, last_odometer_km, last_sensor_at",
+    )
     .is("deleted_at", null);
   if (error) return new NextResponse(error.message, { status: 500 });
 
@@ -174,6 +176,17 @@ async function run(request: NextRequest) {
     vehicle_id: string;
     meta: Record<string, unknown>;
   }[] = [];
+  const sensorInserts: Array<{
+    vehicle_id: string;
+    fuel_percent: number;
+    temp_celsius: number;
+    voltage_v: number;
+    engine_rpm: number;
+    odometer_km: number;
+  }> = [];
+  const fuelTheftNotices: { vehicle_id: string; drop: number }[] = [];
+  const FUEL_THEFT_DROP_PCT = 15;
+  const FUEL_THEFT_WINDOW_MIN = 10;
 
   for (const v of vehicles || []) {
     const baseLat = v.last_lat ?? 24.7136;
@@ -211,6 +224,49 @@ async function run(request: NextRequest) {
       anomaly_kind,
     });
 
+    // Sensor data — plausible OBD-II output for this tick
+    const prevFuel = v.last_fuel_percent ?? 100;
+    const fuelDelta = speed_kmh > 0 ? -Math.min(0.7, speed_kmh / 200) : 0;
+    let fuel = prevFuel + fuelDelta;
+    if (fuel < 5) fuel = 100; // simulated refuel
+    if (fuel > 100) fuel = 100;
+    const temp = 75 + Math.random() * 20 + (speed_kmh > 80 ? 5 : 0);
+    const voltage = 12.2 + Math.random() * 1.6;
+    const rpm =
+      speed_kmh > 1
+        ? Math.round(900 + speed_kmh * 35 + (Math.random() - 0.5) * 200)
+        : Math.round(750 + (Math.random() - 0.5) * 80);
+    const prevOdo = v.last_odometer_km ?? 0;
+    const odo = prevOdo + (speed_kmh > 0 ? speed_kmh / 60 : 0);
+
+    sensorInserts.push({
+      vehicle_id: v.id,
+      fuel_percent: Number(fuel.toFixed(1)),
+      temp_celsius: Number(temp.toFixed(1)),
+      voltage_v: Number(voltage.toFixed(2)),
+      engine_rpm: rpm,
+      odometer_km: Number(odo.toFixed(2)),
+    });
+
+    // Fuel theft: sudden drop in fuel over a short window
+    if (
+      v.last_fuel_percent != null &&
+      (v as { last_sensor_at?: string | null }).last_sensor_at
+    ) {
+      const prevTs = new Date(
+        (v as { last_sensor_at: string }).last_sensor_at,
+      ).getTime();
+      const minutesSince = (now.getTime() - prevTs) / 60_000;
+      const drop = v.last_fuel_percent - fuel;
+      if (
+        drop >= FUEL_THEFT_DROP_PCT &&
+        minutesSince > 0 &&
+        minutesSince <= FUEL_THEFT_WINDOW_MIN
+      ) {
+        fuelTheftNotices.push({ vehicle_id: v.id, drop });
+      }
+    }
+
     if (anomaly) anomalyNotices.push({ vehicle_id: v.id, kind: anomaly_kind! });
 
     // Custom monitors — evaluate this ping against active monitors
@@ -223,6 +279,9 @@ async function run(request: NextRequest) {
           speed_kmh,
           idle_seconds: nextIdle,
           ts: now,
+          fuel_percent: Number(fuel.toFixed(1)),
+          temp_celsius: Number(temp.toFixed(1)),
+          voltage_v: Number(voltage.toFixed(2)),
         },
         monitors,
         zoneLites,
@@ -306,6 +365,9 @@ async function run(request: NextRequest) {
   if (inserts.length > 0) {
     await admin.from("locations").insert(inserts);
   }
+  if (sensorInserts.length > 0) {
+    await admin.from("sensor_readings").insert(sensorInserts);
+  }
   if (zoneEventInserts.length > 0) {
     await admin.from("zone_events").insert(zoneEventInserts);
   }
@@ -323,7 +385,8 @@ async function run(request: NextRequest) {
   if (
     anomalyNotices.length > 0 ||
     zoneNotices.length > 0 ||
-    monitorNotices.length > 0
+    monitorNotices.length > 0 ||
+    fuelTheftNotices.length > 0
   ) {
     const { data: admins } = await admin
       .from("profiles")
@@ -357,6 +420,13 @@ async function run(request: NextRequest) {
           link: `/vehicles/${m.vehicle_id}`,
         });
       }
+      for (const f of fuelTheftNotices) {
+        notes.push({
+          user_id: a,
+          message: `⚠ Possible fuel theft: vehicle ${f.vehicle_id.slice(0, 8)}… lost ${f.drop.toFixed(1)}% fuel in <${FUEL_THEFT_WINDOW_MIN} min`,
+          link: `/vehicles/${f.vehicle_id}/sensors`,
+        });
+      }
     }
     if (notes.length > 0) {
       await admin.from("notifications").insert(notes);
@@ -368,5 +438,6 @@ async function run(request: NextRequest) {
     anomalies: anomalyNotices.length,
     zone_events: zoneEventInserts.length,
     monitors_fired: monitorNotices.length,
+    fuel_theft_alerts: fuelTheftNotices.length,
   });
 }

@@ -43,6 +43,7 @@ export interface Vehicle {
   last_engine_rpm: number | null;
   last_odometer_km: number | null;
   last_sensor_at: string | null;
+  fuel_tank_litres: number | null;
   ingest_token?: string;
   deleted_at: string | null;
   created_at: string;

@@ -767,10 +767,13 @@ interface SensorRow {
   plate: string;
   label: string;
   driver_name: string | null;
+  tank_litres: number | null;
   reading_count: number;
   fuel_avg: number | null;
   fuel_min: number | null;
   fuel_max: number | null;
+  fuel_consumed_percent: number | null;
+  fuel_consumed_litres: number | null;
   temp_avg: number | null;
   temp_max: number | null;
   voltage_avg: number | null;
@@ -779,6 +782,7 @@ interface SensorRow {
   odometer_start: number | null;
   odometer_end: number | null;
   distance_km: number | null;
+  efficiency_l_per_100km: number | null;
   last_reading_at: string | null;
 }
 
@@ -815,6 +819,8 @@ async function SensorsReport({
           <TableHead className="text-right">Volt min</TableHead>
           <TableHead className="text-right">RPM avg</TableHead>
           <TableHead className="text-right">Distance</TableHead>
+          <TableHead className="text-right">Fuel used</TableHead>
+          <TableHead className="text-right">L/100km</TableHead>
           <TableHead>Last reading</TableHead>
         </TableRow>
       </TableHeader>
@@ -889,6 +895,29 @@ async function SensorsReport({
               {r.distance_km != null
                 ? `${Number(r.distance_km).toFixed(1)} km`
                 : "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.fuel_consumed_litres != null
+                ? `${Number(r.fuel_consumed_litres).toFixed(1)} L`
+                : r.fuel_consumed_percent != null
+                  ? `${Number(r.fuel_consumed_percent).toFixed(0)}%`
+                  : "—"}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.efficiency_l_per_100km != null ? (
+                <span className="font-medium">
+                  {Number(r.efficiency_l_per_100km).toFixed(1)}
+                </span>
+              ) : r.tank_litres == null ? (
+                <span
+                  className="text-xs text-amber-600 dark:text-amber-400"
+                  title="Set fuel_tank_litres on the vehicle to enable"
+                >
+                  no tank
+                </span>
+              ) : (
+                "—"
+              )}
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">
               {r.last_reading_at

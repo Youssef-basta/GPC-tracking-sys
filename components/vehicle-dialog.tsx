@@ -38,6 +38,7 @@ const schema = z.object({
   status: z.enum(["active", "idle", "offline", "maintenance"]),
   last_lat: z.string().optional(),
   last_lng: z.string().optional(),
+  fuel_tank_litres: z.string().optional(),
 });
 type Values = z.infer<typeof schema>;
 
@@ -69,6 +70,7 @@ export function VehicleDialog(props: Props) {
       status: v?.status ?? "offline",
       last_lat: v?.last_lat?.toString() ?? "",
       last_lng: v?.last_lng?.toString() ?? "",
+      fuel_tank_litres: v?.fuel_tank_litres?.toString() ?? "",
     },
   });
 
@@ -84,6 +86,7 @@ export function VehicleDialog(props: Props) {
         status: v.status,
         last_lat: v.last_lat?.toString() ?? "",
         last_lng: v.last_lng?.toString() ?? "",
+        fuel_tank_litres: v.fuel_tank_litres?.toString() ?? "",
       });
     }
   }, [open, v, reset]);
@@ -99,6 +102,11 @@ export function VehicleDialog(props: Props) {
       status: values.status,
       last_lat: values.last_lat ? Number(values.last_lat) : null,
       last_lng: values.last_lng ? Number(values.last_lng) : null,
+      fuel_tank_litres: values.fuel_tank_litres
+        ? Number(values.fuel_tank_litres)
+        : isEdit
+          ? null
+          : undefined,
     };
     const url = isEdit ? `/api/admin/vehicles/${v!.id}` : "/api/admin/vehicles";
     const res = await fetch(url, {
@@ -233,6 +241,21 @@ export function VehicleDialog(props: Props) {
                 placeholder="46.6753"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="fuel_tank_litres">Fuel tank size (litres)</Label>
+            <Input
+              id="fuel_tank_litres"
+              type="number"
+              step="0.1"
+              min={0}
+              {...register("fuel_tank_litres")}
+              placeholder="60"
+            />
+            <p className="text-xs text-muted-foreground">
+              Needed to compute fuel consumption + L/100km in reports.
+            </p>
           </div>
 
           <div className="space-y-1.5">

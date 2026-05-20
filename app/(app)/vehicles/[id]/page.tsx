@@ -139,7 +139,17 @@ export default async function VehicleDetailPage({
         </Card>
       </div>
 
-      <SensorsPanel vehicle={vehicle} />
+      <div>
+        <SensorsPanel vehicle={vehicle} />
+        <div className="mt-2 text-right">
+          <Link
+            href={`/vehicles/${vehicle.id}/sensors`}
+            className="text-xs text-primary hover:underline"
+          >
+            View full sensor history →
+          </Link>
+        </div>
+      </div>
 
       <SummarySection
         content={activityLog || "No activity yet."}
