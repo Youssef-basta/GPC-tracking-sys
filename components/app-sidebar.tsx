@@ -14,6 +14,7 @@ import {
   Map as MapIcon,
   MapPin,
   Settings,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
@@ -30,6 +31,7 @@ const adminNav = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/content", label: "Content", icon: ShieldAlert },
   { href: "/admin/zones", label: "Zones", icon: MapIcon },
+  { href: "/admin/monitors", label: "Monitors", icon: AlertCircle },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/reports", label: "Reports", icon: FileBarChart },
 ];

@@ -2,6 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { detectZoneCrossings, type ZoneKind, type ZoneShape } from "@/lib/geofencing";
+import {
+  matchMonitors,
+  describeCondition,
+  type MonitorRecord,
+  type ZoneLite,
+  type MonitorCondition,
+} from "@/lib/monitors";
+
+const MONITOR_COOLDOWN_SEC = 300; // 5 minutes
 
 /**
  * GPS simulator + lightweight AI-style anomaly detector.
@@ -91,6 +100,39 @@ async function run(request: NextRequest) {
     alert_on: "enter" | "exit" | "both";
   }>;
 
+  // Load active monitors + zone catalog for monitor evaluation
+  const { data: monitorsData } = await admin
+    .from("monitors")
+    .select(
+      "id, name, is_active, valid_from, valid_until, vehicle_ids, conditions, actions",
+    )
+    .is("deleted_at", null)
+    .eq("is_active", true);
+  const monitors = (monitorsData ?? []) as MonitorRecord[];
+  const zoneLites: ZoneLite[] = zones.map((z) => ({
+    id: z.id,
+    kind: z.kind,
+    shape: z.shape,
+  }));
+
+  // Load existing cooldowns (we only need recent ones)
+  const cooldownMap = new Map<string, Date>();
+  if (monitors.length > 0) {
+    const { data: cooldowns } = await admin
+      .from("monitor_cooldowns")
+      .select("monitor_id, vehicle_id, last_fired")
+      .gte(
+        "last_fired",
+        new Date(Date.now() - MONITOR_COOLDOWN_SEC * 1000).toISOString(),
+      );
+    for (const r of cooldowns ?? []) {
+      cooldownMap.set(
+        `${r.monitor_id}:${r.vehicle_id}`,
+        new Date(r.last_fired as string),
+      );
+    }
+  }
+
   const now = new Date();
   const inserts: Array<{
     vehicle_id: string;
@@ -115,6 +157,22 @@ async function run(request: NextRequest) {
     zone_name: string;
     kind: "enter" | "exit";
     is_prohibited: boolean;
+  }[] = [];
+  const monitorNotices: {
+    monitor_id: string;
+    monitor_name: string;
+    vehicle_id: string;
+    summary: string;
+  }[] = [];
+  const monitorCooldownInserts: {
+    monitor_id: string;
+    vehicle_id: string;
+    last_fired: string;
+  }[] = [];
+  const monitorEventInserts: {
+    monitor_id: string;
+    vehicle_id: string;
+    meta: Record<string, unknown>;
   }[] = [];
 
   for (const v of vehicles || []) {
@@ -154,6 +212,52 @@ async function run(request: NextRequest) {
     });
 
     if (anomaly) anomalyNotices.push({ vehicle_id: v.id, kind: anomaly_kind! });
+
+    // Custom monitors — evaluate this ping against active monitors
+    if (monitors.length > 0) {
+      const fired = matchMonitors(
+        {
+          vehicle_id: v.id,
+          lat,
+          lng,
+          speed_kmh,
+          idle_seconds: nextIdle,
+          ts: now,
+        },
+        monitors,
+        zoneLites,
+      );
+      for (const m of fired) {
+        const key = `${m.id}:${v.id}`;
+        const last = cooldownMap.get(key);
+        if (
+          last &&
+          now.getTime() - last.getTime() < MONITOR_COOLDOWN_SEC * 1000
+        ) {
+          continue; // still in cooldown
+        }
+        const summary = (m.conditions as MonitorCondition[])
+          .map(describeCondition)
+          .join(" AND ");
+        monitorNotices.push({
+          monitor_id: m.id,
+          monitor_name: m.name,
+          vehicle_id: v.id,
+          summary,
+        });
+        monitorCooldownInserts.push({
+          monitor_id: m.id,
+          vehicle_id: v.id,
+          last_fired: now.toISOString(),
+        });
+        monitorEventInserts.push({
+          monitor_id: m.id,
+          vehicle_id: v.id,
+          meta: { summary, speed_kmh, idle_seconds: nextIdle, lat, lng },
+        });
+        cooldownMap.set(key, now);
+      }
+    }
 
     // Geofence crossing detection — diff zones-in between prev and new positions.
     if (zones.length > 0) {
@@ -205,8 +309,22 @@ async function run(request: NextRequest) {
   if (zoneEventInserts.length > 0) {
     await admin.from("zone_events").insert(zoneEventInserts);
   }
+  if (monitorCooldownInserts.length > 0) {
+    await admin
+      .from("monitor_cooldowns")
+      .upsert(monitorCooldownInserts, {
+        onConflict: "monitor_id,vehicle_id",
+      });
+  }
+  if (monitorEventInserts.length > 0) {
+    await admin.from("monitor_events").insert(monitorEventInserts);
+  }
 
-  if (anomalyNotices.length > 0 || zoneNotices.length > 0) {
+  if (
+    anomalyNotices.length > 0 ||
+    zoneNotices.length > 0 ||
+    monitorNotices.length > 0
+  ) {
     const { data: admins } = await admin
       .from("profiles")
       .select("id")
@@ -232,6 +350,13 @@ async function run(request: NextRequest) {
           link: `/vehicles/${z.vehicle_id}`,
         });
       }
+      for (const m of monitorNotices) {
+        notes.push({
+          user_id: a,
+          message: `Monitor "${m.monitor_name}" fired: ${m.summary} (vehicle ${m.vehicle_id.slice(0, 8)}…)`,
+          link: `/vehicles/${m.vehicle_id}`,
+        });
+      }
     }
     if (notes.length > 0) {
       await admin.from("notifications").insert(notes);
@@ -242,5 +367,6 @@ async function run(request: NextRequest) {
     pings: inserts.length,
     anomalies: anomalyNotices.length,
     zone_events: zoneEventInserts.length,
+    monitors_fired: monitorNotices.length,
   });
 }

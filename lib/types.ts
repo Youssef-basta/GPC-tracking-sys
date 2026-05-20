@@ -142,3 +142,19 @@ export interface UserSettings {
   trail_points: number;
   updated_at: string;
 }
+
+export interface Monitor {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  valid_from: string | null;
+  valid_until: string | null;
+  vehicle_ids: string[] | null;
+  conditions: unknown;
+  actions: unknown;
+  created_by: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
