@@ -18,6 +18,7 @@ import {
 import { SummarySection } from "@/components/summary-section";
 import { IngestCredentials } from "@/components/ingest-credentials";
 import { EditVehicleDialog } from "@/components/vehicle-dialog";
+import { SensorsPanel } from "@/components/sensors-panel";
 import type { Vehicle, VehicleLocation } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -137,6 +138,8 @@ export default async function VehicleDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <SensorsPanel vehicle={vehicle} />
 
       <SummarySection
         content={activityLog || "No activity yet."}

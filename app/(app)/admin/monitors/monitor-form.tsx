@@ -24,7 +24,10 @@ type CondType =
   | "speed_below"
   | "idle_above"
   | "in_zone"
-  | "out_of_zone";
+  | "out_of_zone"
+  | "fuel_below"
+  | "temp_above"
+  | "voltage_below";
 
 const COND_LABELS: Record<CondType, string> = {
   speed_above: "Speed above (km/h)",
@@ -32,6 +35,9 @@ const COND_LABELS: Record<CondType, string> = {
   idle_above: "Idle longer than (seconds)",
   in_zone: "Inside any of the selected zones",
   out_of_zone: "Outside all of the selected zones",
+  fuel_below: "Fuel level below (%)",
+  temp_above: "Engine temperature above (°C)",
+  voltage_below: "Battery voltage below (V)",
 };
 
 interface DraftCondition {
@@ -39,12 +45,18 @@ interface DraftCondition {
   kmh?: number;
   seconds?: number;
   zone_ids?: string[];
+  percent?: number;
+  celsius?: number;
+  volts?: number;
 }
 
 function condToDraft(c: MonitorCondition): DraftCondition {
   if (c.type === "speed_above" || c.type === "speed_below")
     return { type: c.type, kmh: c.kmh };
   if (c.type === "idle_above") return { type: c.type, seconds: c.seconds };
+  if (c.type === "fuel_below") return { type: c.type, percent: c.percent };
+  if (c.type === "temp_above") return { type: c.type, celsius: c.celsius };
+  if (c.type === "voltage_below") return { type: c.type, volts: c.volts };
   return { type: c.type, zone_ids: c.zone_ids };
 }
 
@@ -60,6 +72,18 @@ function draftToCond(d: DraftCondition): MonitorCondition | null {
   if (d.type === "in_zone" || d.type === "out_of_zone") {
     if (!d.zone_ids || d.zone_ids.length === 0) return null;
     return { type: d.type, zone_ids: d.zone_ids };
+  }
+  if (d.type === "fuel_below") {
+    if (d.percent == null || isNaN(d.percent)) return null;
+    return { type: "fuel_below", percent: Number(d.percent) };
+  }
+  if (d.type === "temp_above") {
+    if (d.celsius == null || isNaN(d.celsius)) return null;
+    return { type: "temp_above", celsius: Number(d.celsius) };
+  }
+  if (d.type === "voltage_below") {
+    if (d.volts == null || isNaN(d.volts)) return null;
+    return { type: "voltage_below", volts: Number(d.volts) };
   }
   return null;
 }
@@ -112,6 +136,9 @@ export function MonitorForm({
       idle_above: { type: "idle_above", seconds: 600 },
       in_zone: { type: "in_zone", zone_ids: [] },
       out_of_zone: { type: "out_of_zone", zone_ids: [] },
+      fuel_below: { type: "fuel_below", percent: 15 },
+      temp_above: { type: "temp_above", celsius: 105 },
+      voltage_below: { type: "voltage_below", volts: 11.8 },
     };
     updateCondition(i, defaults[newType]);
   }
@@ -317,6 +344,41 @@ export function MonitorForm({
                   value={c.seconds ?? ""}
                   onChange={(e) =>
                     updateCondition(i, { seconds: Number(e.target.value) })
+                  }
+                />
+              )}
+              {c.type === "fuel_below" && (
+                <Input
+                  type="number"
+                  className="h-8 w-28 text-sm"
+                  step="1"
+                  min={0}
+                  max={100}
+                  value={c.percent ?? ""}
+                  onChange={(e) =>
+                    updateCondition(i, { percent: Number(e.target.value) })
+                  }
+                />
+              )}
+              {c.type === "temp_above" && (
+                <Input
+                  type="number"
+                  className="h-8 w-28 text-sm"
+                  step="1"
+                  value={c.celsius ?? ""}
+                  onChange={(e) =>
+                    updateCondition(i, { celsius: Number(e.target.value) })
+                  }
+                />
+              )}
+              {c.type === "voltage_below" && (
+                <Input
+                  type="number"
+                  className="h-8 w-28 text-sm"
+                  step="0.1"
+                  value={c.volts ?? ""}
+                  onChange={(e) =>
+                    updateCondition(i, { volts: Number(e.target.value) })
                   }
                 />
               )}

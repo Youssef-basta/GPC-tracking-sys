@@ -37,10 +37,28 @@ export interface Vehicle {
   last_lat: number | null;
   last_lng: number | null;
   last_seen_at: string | null;
+  last_fuel_percent: number | null;
+  last_temp_celsius: number | null;
+  last_voltage_v: number | null;
+  last_engine_rpm: number | null;
+  last_odometer_km: number | null;
+  last_sensor_at: string | null;
   ingest_token?: string;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SensorReading {
+  id: number;
+  vehicle_id: string;
+  fuel_percent: number | null;
+  temp_celsius: number | null;
+  voltage_v: number | null;
+  engine_rpm: number | null;
+  odometer_km: number | null;
+  extras: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface VehicleLocation {

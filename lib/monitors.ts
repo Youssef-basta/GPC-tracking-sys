@@ -15,7 +15,10 @@ export type MonitorCondition =
   | { type: "speed_below"; kmh: number }
   | { type: "idle_above"; seconds: number }
   | { type: "in_zone"; zone_ids: string[] }
-  | { type: "out_of_zone"; zone_ids: string[] };
+  | { type: "out_of_zone"; zone_ids: string[] }
+  | { type: "fuel_below"; percent: number }
+  | { type: "temp_above"; celsius: number }
+  | { type: "voltage_below"; volts: number };
 
 export type MonitorAction = { type: "notify_admins" };
 
@@ -43,6 +46,9 @@ export interface PingContext {
   speed_kmh: number;
   idle_seconds: number;
   ts: Date;
+  fuel_percent?: number | null;
+  temp_celsius?: number | null;
+  voltage_v?: number | null;
 }
 
 /** Returns true when the given vehicle is currently inside the zone. */
@@ -78,6 +84,12 @@ function evalCondition(
         return z ? inZone(point, z) : false;
       });
     }
+    case "fuel_below":
+      return ping.fuel_percent != null && ping.fuel_percent < cond.percent;
+    case "temp_above":
+      return ping.temp_celsius != null && ping.temp_celsius > cond.celsius;
+    case "voltage_below":
+      return ping.voltage_v != null && ping.voltage_v < cond.volts;
     default:
       return false;
   }
@@ -133,5 +145,11 @@ export function describeCondition(c: MonitorCondition): string {
       return `inside ${c.zone_ids.length} zone${c.zone_ids.length === 1 ? "" : "s"}`;
     case "out_of_zone":
       return `outside ${c.zone_ids.length} zone${c.zone_ids.length === 1 ? "" : "s"}`;
+    case "fuel_below":
+      return `fuel < ${c.percent}%`;
+    case "temp_above":
+      return `engine temp > ${c.celsius}°C`;
+    case "voltage_below":
+      return `voltage < ${c.volts} V`;
   }
 }

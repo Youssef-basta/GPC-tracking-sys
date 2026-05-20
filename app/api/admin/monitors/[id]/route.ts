@@ -19,6 +19,18 @@ const conditionSchema = z.discriminatedUnion("type", [
     type: z.literal("out_of_zone"),
     zone_ids: z.array(z.string().uuid()).min(1).max(50),
   }),
+  z.object({
+    type: z.literal("fuel_below"),
+    percent: z.number().gte(0).lte(100),
+  }),
+  z.object({
+    type: z.literal("temp_above"),
+    celsius: z.number().gte(-50).lte(200),
+  }),
+  z.object({
+    type: z.literal("voltage_below"),
+    volts: z.number().gte(0).lte(50),
+  }),
 ]);
 
 const actionSchema = z.object({ type: z.literal("notify_admins") });

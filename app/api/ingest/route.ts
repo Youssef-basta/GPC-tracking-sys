@@ -29,6 +29,17 @@ import {
  * Anomalies (long_idle, route_jump) are flagged and admins receive notifications.
  */
 
+const sensorSchema = z
+  .object({
+    fuel_percent: z.number().gte(0).lte(100).optional(),
+    temp_celsius: z.number().gte(-50).lte(200).optional(),
+    voltage_v: z.number().gte(0).lte(50).optional(),
+    engine_rpm: z.number().int().gte(0).lte(20000).optional(),
+    odometer_km: z.number().gte(0).lte(10_000_000).optional(),
+    extras: z.record(z.string(), z.unknown()).optional(),
+  })
+  .optional();
+
 const pingSchema = z.object({
   lat: z.number().gte(-90).lte(90),
   lng: z.number().gte(-180).lte(180),
@@ -36,6 +47,7 @@ const pingSchema = z.object({
   heading: z.number().gte(0).lt(360).optional(),
   idle_seconds: z.number().int().gte(0).optional(),
   created_at: z.string().datetime().optional(),
+  sensors: sensorSchema,
 });
 
 const bodySchema = z.union([
@@ -106,6 +118,48 @@ export async function POST(request: NextRequest) {
   const { error: insErr } = await admin.from("locations").insert(inserts);
   if (insErr) {
     return new NextResponse(insErr.message, { status: 500 });
+  }
+
+  // Sensor readings — one row per ping that carries a `sensors` object.
+  const sensorInserts = points
+    .map((p) => {
+      if (!p.sensors) return null;
+      const s = p.sensors;
+      // Only insert if at least one known field is present
+      if (
+        s.fuel_percent == null &&
+        s.temp_celsius == null &&
+        s.voltage_v == null &&
+        s.engine_rpm == null &&
+        s.odometer_km == null &&
+        (!s.extras || Object.keys(s.extras).length === 0)
+      ) {
+        return null;
+      }
+      return {
+        vehicle_id: vehicle.id,
+        fuel_percent: s.fuel_percent ?? null,
+        temp_celsius: s.temp_celsius ?? null,
+        voltage_v: s.voltage_v ?? null,
+        engine_rpm: s.engine_rpm ?? null,
+        odometer_km: s.odometer_km ?? null,
+        extras: s.extras ?? {},
+        created_at: p.created_at ?? new Date().toISOString(),
+      };
+    })
+    .filter(Boolean) as Array<{
+    vehicle_id: string;
+    fuel_percent: number | null;
+    temp_celsius: number | null;
+    voltage_v: number | null;
+    engine_rpm: number | null;
+    odometer_km: number | null;
+    extras: Record<string, unknown>;
+    created_at: string;
+  }>;
+
+  if (sensorInserts.length > 0) {
+    await admin.from("sensor_readings").insert(sensorInserts);
   }
 
   // Geofence crossings — compare the first and last ping of this batch
