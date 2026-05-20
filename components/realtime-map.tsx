@@ -61,6 +61,27 @@ function buildPoiIcon(color: string, emoji: string) {
   });
 }
 
+function FocusVehicle({
+  vehicleId,
+  vehicles,
+}: {
+  vehicleId: string | null;
+  vehicles: Vehicle[];
+}) {
+  const map = useMap();
+  const lastId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!vehicleId || vehicleId === lastId.current) return;
+    const v = vehicles.find((x) => x.id === vehicleId);
+    if (!v || v.last_lat == null || v.last_lng == null) return;
+    map.flyTo([v.last_lat, v.last_lng], Math.max(map.getZoom(), 14), {
+      duration: 0.6,
+    });
+    lastId.current = vehicleId;
+  }, [vehicleId, vehicles, map]);
+  return null;
+}
+
 function FitBoundsOnce({ vehicles }: { vehicles: Vehicle[] }) {
   const map = useMap();
   const fitted = useRef(false);
@@ -164,12 +185,14 @@ export function RealtimeMap({
   initialZones = [],
   initialPois = [],
   trailPoints = 30,
+  focusVehicleId = null,
   height = 520,
 }: {
   initialVehicles: Vehicle[];
   initialZones?: Zone[];
   initialPois?: Poi[];
   trailPoints?: number;
+  focusVehicleId?: string | null;
   height?: number;
 }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
@@ -623,6 +646,7 @@ export function RealtimeMap({
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
           <FitBoundsOnce vehicles={vehicles} />
+          <FocusVehicle vehicleId={focusVehicleId} vehicles={vehicles} />
           <MapClickHandler
             tool={tool}
             onClick={handleMapClick}

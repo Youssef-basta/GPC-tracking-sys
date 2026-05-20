@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MiniMapPickerLoader } from "@/components/mini-map-picker-loader";
 import { POI_CATEGORIES } from "@/lib/poi";
 import type { Poi, PoiCategory } from "@/lib/types";
 
@@ -197,6 +198,22 @@ export function PoiDialog(
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label>Location</Label>
+            <p className="text-xs text-muted-foreground">
+              Click anywhere on the map to pick a location. Drag the pin to
+              fine-tune.
+            </p>
+            <MiniMapPickerLoader
+              lat={Number(watch("lat")) || 24.7136}
+              lng={Number(watch("lng")) || 46.6753}
+              color={watch("icon_color") || "#0ea5e9"}
+              onChange={(lat, lng) => {
+                setValue("lat", lat.toFixed(6));
+                setValue("lng", lng.toFixed(6));
+              }}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="lat">Latitude *</Label>

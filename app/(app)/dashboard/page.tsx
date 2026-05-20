@@ -1,5 +1,5 @@
 import { requireProfile } from "@/lib/auth";
-import { RealtimeMapLoader } from "@/components/realtime-map-loader";
+import { DashboardClient } from "./dashboard-client";
 import { RealtimeStatus } from "@/components/realtime-status";
 import { StatusCounts } from "@/components/status-counts";
 import { SimulateButton } from "@/components/simulate-button";
@@ -34,7 +34,8 @@ export default async function DashboardPage() {
         <div>
           <PageTitle>Live fleet</PageTitle>
           <p className="text-sm text-muted-foreground">
-            Realtime positions stream in as vehicles report.
+            Realtime positions stream in as vehicles report. Click a vehicle
+            in the side list to fly there.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
 
       <StatusCounts vehicles={list} />
 
-      <RealtimeMapLoader
+      <DashboardClient
         initialVehicles={list}
         initialZones={zoneList}
         initialPois={poiList}
